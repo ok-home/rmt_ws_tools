@@ -1,32 +1,29 @@
-# _Sample project_
+| Supported Targets | ESP32 | ESP32-C2 | ESP32-C3 | ESP32-C6 | ESP32-H2 | ESP32-P4 | ESP32-S2 | ESP32-S3 |
+| ----------------- | ----- | -------- | -------- | -------- | -------- | -------- | -------- | -------- |
 
-(See the README.md file in the upper level 'examples' directory for more information about examples.)
+# ESP-IDF I2C Tools with websocket interface
 
-This is the simplest buildable example. The example is used by command `idf.py create-project`
-that copies the project to user specified path and set it's name. For more information follow the [docs page](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html#start-a-new-project)
+## Overview
 
+- Simple clone [ESP-IDF i2c_Tools](https://github.com/espressif/esp-idf/tree/master/examples/peripherals/i2c/i2c_tools) with websocket interface
+- connects as a standard ESP-IDF component
+- can be used to test i2c devices and as an i2c signal generator for [logic_analyzer](https://github.com/ok-home/logic_analyzer)
 
+## How to use 
 
-## How to use example
-We encourage the users to use the example as a template for the new projects.
-A recommended way is to follow the instructions on a [docs page](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html#start-a-new-project).
+  - Connect as standart ESP-IDF component
+  - Start a Wi-Fi connection i2c_tools_wifi_connect() or use an existing one
+  - Run a web server i2c_tools_ws_server or use an existing web server with websocket support
+  - Register i2c_tools handlers ( web page & ws handlers) i2c_tools_register_uri_handlers(httpd_handle_t server)
+  - Go to the device web page
 
-## Example folder contents
+Use as example [i2c_ws_tools-example](https://github.com/ok-home/i2c_ws_tools/tree/main/i2c_ws_tools_example)
 
-The project **sample_project** contains one source file in C language [main.c](main/main.c). The file is located in folder [main](main).
+### Configure the project
 
-ESP-IDF projects are built using CMake. The project build configuration is contained in `CMakeLists.txt`
-files that provide set of directives and instructions describing the project's source files and targets
-(executable, library, or both). 
+Open the project configuration menu (`idf.py menuconfig`). Then go into `I2C WS Tools Configuration` menu.
 
-Below is short explanation of remaining files in the project folder.
+### Build and Flash
 
-```
-├── CMakeLists.txt
-├── main
-│   ├── CMakeLists.txt
-│   └── main.c
-└── README.md                  This is the file you are currently reading
-```
-Additionally, the sample project contains Makefile and component.mk files, used for the legacy Make based build system. 
-They are not used or needed when building with CMake and idf.py.
+See the [Getting Started Guide](https://docs.espressif.com/projects/esp-idf/en/latest/get-started/index.html) for full steps to configure and use ESP-IDF to build projects.
+

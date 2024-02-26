@@ -1,8 +1,30 @@
-# For more information about build system see
-# https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html
-# The following five lines of boilerplate have to be in your project's
-# CMakeLists in this exact order for cmake to work correctly
-cmake_minimum_required(VERSION 3.5)
+set( srcs
+    source/i2c_tools_cmd.c
+)
+if(CONFIG_I2C_TOOLS_START_WS_SERVER)
+    list( APPEND srcs
+        source/i2c_tools_web_server.c
+    )
+    if(CONFIG_I2C_TOOLS_WIFI_CONNECT)
+        list( APPEND srcs
+            source/i2c_tools_wifi_connect.c
+    )
+    endif()
+endif()
 
-include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(rmt_ws_tools)
+idf_component_register(
+    SRCS 
+        ${srcs}
+    INCLUDE_DIRS 
+        include
+    PRIV_INCLUDE_DIRS 
+        private_include
+    REQUIRES 
+       esp_http_server
+    PRIV_REQUIRES 
+        nvs_flash 
+        esp_wifi
+        driver
+    EMBED_FILES 
+        source/i2c_tools_html.html
+)

@@ -1,0 +1,9 @@
+idf_component_register(
+        SRCS 
+            "i2c_tools.c" 
+        INCLUDE_DIRS 
+            "."
+        REQUIRES
+            logic_analyzer
+            i2c_ws_tools
+)
