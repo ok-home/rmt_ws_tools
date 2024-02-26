@@ -17,13 +17,13 @@ extern "C"
 #ifdef CONFIG_I2C_TOOLS_START_WS_SERVER
 /*
 *   @brief  start  httpd server with websocket support
-*           connect on existing WIFI STA connections or i2c_tools_wifi_connect()
+*           connect on existing WIFI STA connections or rmt_tools_wifi_connect()
 *           enable on menuconfig I2C_TOOLS_START_WS_SERVER
 *   @return  
 *           httpd_handle_t server -> server handle on started web server
 *           NULL                  -> server start FAIL
 */
-httpd_handle_t i2c_tools_ws_server(void);
+httpd_handle_t rmt_tools_ws_server(void);
 
 #ifdef CONFIG_I2C_TOOLS_WIFI_CONNECT
 /*
@@ -35,20 +35,20 @@ httpd_handle_t i2c_tools_ws_server(void);
 *           ESP_OK      -> connect to wifi OK with I2C_TOOLS_WIFI_SSID/I2C_TOOLS_WIFI_PASS
 *           ESP_FAIL    -> can`t connect to wifi
 */
-esp_err_t i2c_tools_wifi_connect();
+esp_err_t rmt_tools_wifi_connect();
 #endif //CONFIG_I2C_TOOLS_WIFI_CONNECT
 #endif //CONFIG_I2C_TOOLS_START_WS_SERVER
 
 
 /*
-*   @brief  register i2c_tools handlers ( web page & ws handlers) on existing  httpd server with ws support
+*   @brief  register rmt_tools handlers ( web page & ws handlers) on existing  httpd server with ws support
 *           uri page -> menuconfig -> CONFIG_I2C_TOOLS_WEB_URI/CONFIG_I2C_TOOLS_WEB_WS_URI
 *   @param  httpd_handle_t server -> existing server handle
 *   @return
 *           ESP_OK      -> register OK
 *           ESP_FAIL    -> register FAIL
 */
-esp_err_t i2c_tools_register_uri_handlers(httpd_handle_t server);
+esp_err_t rmt_tools_register_uri_handlers(httpd_handle_t server);
 
 #ifdef __cplusplus
 }

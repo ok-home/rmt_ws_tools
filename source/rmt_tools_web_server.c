@@ -14,13 +14,13 @@
 #include <sys/param.h>
 
 #include <esp_http_server.h>
-#include "i2c_tools.h"
+#include "rmt_tools.h"
 // #include "logic_analyzer_ws.h"
 
 /*
  * Simple websocket http server
  */
-static const char *TAG = "i2c_tools_ws_server";
+static const char *TAG = "rmt_tools_ws_server";
 
 static httpd_handle_t start_webserver(void)
 {
@@ -77,7 +77,7 @@ static void connect_handler(void *arg, esp_event_base_t event_base,
 // create & start ws server
 // if server already running
 // skip & go to register uri handlers
-httpd_handle_t i2c_tools_ws_server(void)
+httpd_handle_t rmt_tools_ws_server(void)
 {
     static httpd_handle_t server = NULL;
 

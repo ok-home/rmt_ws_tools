@@ -1,13 +1,13 @@
 set( srcs
-    source/i2c_tools_cmd.c
+    source/rmt_tools_cmd.c
 )
 if(CONFIG_I2C_TOOLS_START_WS_SERVER)
     list( APPEND srcs
-        source/i2c_tools_web_server.c
+        source/rmt_tools_web_server.c
     )
     if(CONFIG_I2C_TOOLS_WIFI_CONNECT)
         list( APPEND srcs
-            source/i2c_tools_wifi_connect.c
+            source/rmt_tools_wifi_connect.c
     )
     endif()
 endif()
@@ -26,5 +26,5 @@ idf_component_register(
         esp_wifi
         driver
     EMBED_FILES 
-        source/i2c_tools_html.html
+        source/rmt_tools_html.html
 )

@@ -15,10 +15,7 @@
 #include "esp_netif.h"
 #include "esp_http_server.h"
 
-#include "i2c_tools.h"
-
-//#define  CONFIG_I2C_TOOLS_WIFI_SSID "ok-home-Keenetic"
-//#define  CONFIG_I2C_TOOLS_WIFI_PASS "RicohPriport"
+#include "rmt_tools.h"
 
 #define STA_ESP_MAXIMUM_RETRY 5
 
@@ -31,7 +28,7 @@ static EventGroupHandle_t s_wifi_event_group;
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT BIT1
 
-static const char *TAG = "i2c_wifi_connect";
+static const char *TAG = "rmt_wifi_connect";
 
 static int short_retry_num = 0;
 
@@ -144,7 +141,7 @@ static esp_err_t init_sta(char *sta_ssid, char *sta_pass)
     return err;
 }
 
-esp_err_t i2c_tools_wifi_connect()
+esp_err_t rmt_tools_wifi_connect()
 {
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND)

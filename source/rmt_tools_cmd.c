@@ -18,7 +18,7 @@
 #include "esp_http_server.h"
 
 #include "jsmn.h"
-#include "i2c_tools.h"
+#include "rmt_tools.h"
 
 #define I2C_MASTER_TX_BUF_DISABLE 0 /*!< I2C master doesn't need buffer */
 #define I2C_MASTER_RX_BUF_DISABLE 0 /*!< I2C master doesn't need buffer */
@@ -29,7 +29,7 @@
 #define ACK_VAL 0x0                 /*!< I2C ack value */
 #define NACK_VAL 0x1                /*!< I2C nack value */
 
-static const char *TAG = "i2c_tools_cmd";
+static const char *TAG = "rmt_tools_cmd";
 
 // web cfg
 #define I2C_PORT_HTML "i2cPortConfig"
@@ -54,7 +54,7 @@ static const char *TAG = "i2c_tools_cmd";
 #define I2C_READ_CMD "GetCmd"
 #define I2C_WRITE_CMD "SetCmd"
 
-typedef struct i2c_tools_cfg
+typedef struct rmt_tools_cfg
 {
     int trig_pin;           // trigger gpio
     int port;               // i2c port ( 0/1 )
@@ -68,9 +68,9 @@ typedef struct i2c_tools_cfg
     int reg_write;          // register addr on write cmd, -1 -> scip
     int write_size;         // bytes write on single read phase
     uint8_t write_data[32]; // data to write
-} i2c_tools_cfg_t;
+} rmt_tools_cfg_t;
 
-static i2c_tools_cfg_t i2c_cfg =
+static rmt_tools_cfg_t rmt_cfg =
     {
         .port = 0,
         .scl = 19,
@@ -80,8 +80,8 @@ static i2c_tools_cfg_t i2c_cfg =
 // set/clear trigger pin
 static void trig_set(int lvl)
 {
-    if (i2c_cfg.trig_pin != -1)
-        gpio_set_level(i2c_cfg.trig_pin, lvl);
+    if (rmt_cfg.trig_pin != -1)
+        gpio_set_level(rmt_cfg.trig_pin, lvl);
 }
 
 // simple json parse -> only one parametr name/val
@@ -121,38 +121,38 @@ static void send_string_to_ws(char *str, httpd_req_t *req)
     httpd_ws_send_frame(req, &ws_pkt);
 }
 
-static void send_default_i2c_cfg_to_ws(httpd_req_t *req)
+static void send_default_rmt_cfg_to_ws(httpd_req_t *req)
 {
     char jsonstr[64] = {0};
-    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", I2C_PORT_HTML, i2c_cfg.port);
+    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", I2C_PORT_HTML, rmt_cfg.port);
     send_string_to_ws(jsonstr, req);
-    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", I2C_FREQ_HTML, i2c_cfg.freq);
+    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", I2C_FREQ_HTML, rmt_cfg.freq);
     send_string_to_ws(jsonstr, req);
-    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", I2C_SCL_HTML, i2c_cfg.scl);
+    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", I2C_SCL_HTML, rmt_cfg.scl);
     send_string_to_ws(jsonstr, req);
-    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", I2C_SDA_HTML, i2c_cfg.sda);
+    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", I2C_SDA_HTML, rmt_cfg.sda);
     send_string_to_ws(jsonstr, req);
-    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", I2C_TRIG_HTML, i2c_cfg.trig_pin);
+    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", I2C_TRIG_HTML, rmt_cfg.trig_pin);
     send_string_to_ws(jsonstr, req);
 }
-static esp_err_t i2c_master_driver_initialize(void)
+static esp_err_t rmt_master_driver_initialize(void)
 {
-    i2c_config_t conf = {
+    rmt_config_t conf = {
         .mode = I2C_MODE_MASTER,
-        .sda_io_num = i2c_cfg.sda,
+        .sda_io_num = rmt_cfg.sda,
         .sda_pullup_en = GPIO_PULLUP_ENABLE,
-        .scl_io_num = i2c_cfg.scl,
+        .scl_io_num = rmt_cfg.scl,
         .scl_pullup_en = GPIO_PULLUP_ENABLE,
-        .master.clk_speed = i2c_cfg.freq,
+        .master.clk_speed = rmt_cfg.freq,
         // .clk_flags = 0,          /*!< Optional, you can use I2C_SCLK_SRC_FLAG_* flags to choose i2c source clock here. */
     };
-    return i2c_param_config(i2c_cfg.port, &conf);
+    return rmt_param_config(rmt_cfg.port, &conf);
 }
 // scan all device on i2c bus
-static int i2c_scan(httpd_req_t *req)
+static int rmt_scan(httpd_req_t *req)
 {
-    i2c_driver_install(i2c_cfg.port, I2C_MODE_MASTER, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, 0);
-    i2c_master_driver_initialize();
+    rmt_driver_install(rmt_cfg.port, I2C_MODE_MASTER, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, 0);
+    rmt_master_driver_initialize();
     uint8_t address;
     char adrstr[8] = {0};
     char sendstr[80] = "     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f  ";
@@ -164,14 +164,14 @@ static int i2c_scan(httpd_req_t *req)
         for (int j = 0; j < 16; j++)
         {
             address = i + j;
-            i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-            i2c_master_start(cmd);
-            i2c_master_write_byte(cmd, (address << 1) | WRITE_BIT, ACK_CHECK_EN);
-            i2c_master_stop(cmd);
+            rmt_cmd_handle_t cmd = rmt_cmd_link_create();
+            rmt_master_start(cmd);
+            rmt_master_write_byte(cmd, (address << 1) | WRITE_BIT, ACK_CHECK_EN);
+            rmt_master_stop(cmd);
             trig_set(1);
-            esp_err_t ret = i2c_master_cmd_begin(i2c_cfg.port, cmd, 50 / portTICK_PERIOD_MS);
+            esp_err_t ret = rmt_master_cmd_begin(rmt_cfg.port, cmd, 50 / portTICK_PERIOD_MS);
             trig_set(0);
-            i2c_cmd_link_delete(cmd);
+            rmt_cmd_link_delete(cmd);
             if (ret == ESP_OK)
             {
                 sprintf(adrstr, "%02x: ", address);
@@ -188,42 +188,42 @@ static int i2c_scan(httpd_req_t *req)
         }
         send_string_to_ws(sendstr, req);
     }
-    i2c_driver_delete(i2c_cfg.port);
+    rmt_driver_delete(rmt_cfg.port);
     return 0;
 }
 // read data from single register on i2c device
 // if register == -1 read data only without set register addr phase
-static int i2c_read(httpd_req_t *req)
+static int rmt_read(httpd_req_t *req)
 {
-    uint8_t *data = malloc(i2c_cfg.read_size);
-    i2c_driver_install(i2c_cfg.port, I2C_MODE_MASTER, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, 0);
-    i2c_master_driver_initialize();
+    uint8_t *data = malloc(rmt_cfg.read_size);
+    rmt_driver_install(rmt_cfg.port, I2C_MODE_MASTER, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, 0);
+    rmt_master_driver_initialize();
 
-    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-    i2c_master_start(cmd);
-    if (i2c_cfg.reg_read != -1)
+    rmt_cmd_handle_t cmd = rmt_cmd_link_create();
+    rmt_master_start(cmd);
+    if (rmt_cfg.reg_read != -1)
     {
-        i2c_master_write_byte(cmd, i2c_cfg.chip << 1 | WRITE_BIT, ACK_CHECK_EN);
-        i2c_master_write_byte(cmd, i2c_cfg.reg_read, ACK_CHECK_EN);
-        i2c_master_start(cmd);
+        rmt_master_write_byte(cmd, rmt_cfg.chip << 1 | WRITE_BIT, ACK_CHECK_EN);
+        rmt_master_write_byte(cmd, rmt_cfg.reg_read, ACK_CHECK_EN);
+        rmt_master_start(cmd);
     }
-    i2c_master_write_byte(cmd, i2c_cfg.chip << 1 | READ_BIT, ACK_CHECK_EN);
-    if (i2c_cfg.read_size > 1)
+    rmt_master_write_byte(cmd, rmt_cfg.chip << 1 | READ_BIT, ACK_CHECK_EN);
+    if (rmt_cfg.read_size > 1)
     {
-        i2c_master_read(cmd, data, i2c_cfg.read_size - 1, ACK_VAL);
+        rmt_master_read(cmd, data, rmt_cfg.read_size - 1, ACK_VAL);
     }
-    i2c_master_read_byte(cmd, data + i2c_cfg.read_size - 1, NACK_VAL);
-    i2c_master_stop(cmd);
+    rmt_master_read_byte(cmd, data + rmt_cfg.read_size - 1, NACK_VAL);
+    rmt_master_stop(cmd);
     trig_set(1);
-    esp_err_t ret = i2c_master_cmd_begin(i2c_cfg.port, cmd, 1000 / portTICK_PERIOD_MS);
+    esp_err_t ret = rmt_master_cmd_begin(rmt_cfg.port, cmd, 1000 / portTICK_PERIOD_MS);
     trig_set(0);
-    i2c_cmd_link_delete(cmd);
+    rmt_cmd_link_delete(cmd);
     char datastr[8] = {0};
     char sendstr[100];
     sendstr[0] = 0;
     if (ret == ESP_OK)
     {
-        for (int i = 0; i < i2c_cfg.read_size; i++)
+        for (int i = 0; i < rmt_cfg.read_size; i++)
         {
             sprintf(datastr, "0x%02x ", data[i]);
             strcat(sendstr, datastr);
@@ -233,7 +233,7 @@ static int i2c_read(httpd_req_t *req)
                 sendstr[0] = 0;
             }
         }
-        if (i2c_cfg.read_size % 16)
+        if (rmt_cfg.read_size % 16)
         {
             send_string_to_ws(sendstr, req);
             sendstr[0] = 0;
@@ -250,31 +250,31 @@ static int i2c_read(httpd_req_t *req)
         send_string_to_ws("Read failed", req);
     }
     free(data);
-    i2c_driver_delete(i2c_cfg.port);
+    rmt_driver_delete(rmt_cfg.port);
     return 0;
 }
 // write data to single register on i2c device
 // if register == -1 write data only without register addr
-static int i2c_write(httpd_req_t *req)
+static int rmt_write(httpd_req_t *req)
 {
-    i2c_driver_install(i2c_cfg.port, I2C_MODE_MASTER, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, 0);
-    i2c_master_driver_initialize();
-    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-    i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, i2c_cfg.chip << 1 | WRITE_BIT, ACK_CHECK_EN);
-    if (i2c_cfg.reg_write != -1)
+    rmt_driver_install(rmt_cfg.port, I2C_MODE_MASTER, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, 0);
+    rmt_master_driver_initialize();
+    rmt_cmd_handle_t cmd = rmt_cmd_link_create();
+    rmt_master_start(cmd);
+    rmt_master_write_byte(cmd, rmt_cfg.chip << 1 | WRITE_BIT, ACK_CHECK_EN);
+    if (rmt_cfg.reg_write != -1)
     {
-        i2c_master_write_byte(cmd, i2c_cfg.reg_write, ACK_CHECK_EN);
+        rmt_master_write_byte(cmd, rmt_cfg.reg_write, ACK_CHECK_EN);
     }
-    for (int i = 0; i < i2c_cfg.write_size; i++)
+    for (int i = 0; i < rmt_cfg.write_size; i++)
     {
-        i2c_master_write_byte(cmd, i2c_cfg.write_data[i], ACK_CHECK_EN);
+        rmt_master_write_byte(cmd, rmt_cfg.write_data[i], ACK_CHECK_EN);
     }
-    i2c_master_stop(cmd);
+    rmt_master_stop(cmd);
     trig_set(1);
-    esp_err_t ret = i2c_master_cmd_begin(i2c_cfg.port, cmd, 1000 / portTICK_PERIOD_MS);
+    esp_err_t ret = rmt_master_cmd_begin(rmt_cfg.port, cmd, 1000 / portTICK_PERIOD_MS);
     trig_set(0);
-    i2c_cmd_link_delete(cmd);
+    rmt_cmd_link_delete(cmd);
     if (ret == ESP_OK)
     {
         ESP_LOGI(TAG, "Write OK");
@@ -290,24 +290,24 @@ static int i2c_write(httpd_req_t *req)
         ESP_LOGW(TAG, "Write Failed");
         send_string_to_ws("Write Failed", req);
     }
-    i2c_driver_delete(i2c_cfg.port);
+    rmt_driver_delete(rmt_cfg.port);
     return 0;
 }
 // dump all register data from i2c device
-static int i2c_dump(httpd_req_t *req)
+static int rmt_dump(httpd_req_t *req)
 {
-    int size = i2c_cfg.dump_size;
+    int size = rmt_cfg.dump_size;
     if (size != 1 && size != 2 && size != 4)
     {
         ESP_LOGE(TAG, "Wrong read size. Only support 1,2,4");
         send_string_to_ws("Wrong read size. Only support 1,2,4", req);
         return 1;
     }
-    int chip_addr = i2c_cfg.chip;
-    int i2c_port = i2c_cfg.port;
+    int chip_addr = rmt_cfg.chip;
+    int rmt_port = rmt_cfg.port;
 
-    i2c_driver_install(i2c_port, I2C_MODE_MASTER, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, 0);
-    i2c_master_driver_initialize();
+    rmt_driver_install(rmt_port, I2C_MODE_MASTER, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, 0);
+    rmt_master_driver_initialize();
     uint8_t data_addr;
     uint8_t data[4];
     int32_t block[16];
@@ -324,22 +324,22 @@ static int i2c_dump(httpd_req_t *req)
         for (int j = 0; j < 16; j += size)
         {
             data_addr = i + j;
-            i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-            i2c_master_start(cmd);
-            i2c_master_write_byte(cmd, chip_addr << 1 | WRITE_BIT, ACK_CHECK_EN);
-            i2c_master_write_byte(cmd, data_addr, ACK_CHECK_EN);
-            i2c_master_start(cmd);
-            i2c_master_write_byte(cmd, chip_addr << 1 | READ_BIT, ACK_CHECK_EN);
+            rmt_cmd_handle_t cmd = rmt_cmd_link_create();
+            rmt_master_start(cmd);
+            rmt_master_write_byte(cmd, chip_addr << 1 | WRITE_BIT, ACK_CHECK_EN);
+            rmt_master_write_byte(cmd, data_addr, ACK_CHECK_EN);
+            rmt_master_start(cmd);
+            rmt_master_write_byte(cmd, chip_addr << 1 | READ_BIT, ACK_CHECK_EN);
             if (size > 1)
             {
-                i2c_master_read(cmd, data, size - 1, ACK_VAL);
+                rmt_master_read(cmd, data, size - 1, ACK_VAL);
             }
-            i2c_master_read_byte(cmd, data + size - 1, NACK_VAL);
-            i2c_master_stop(cmd);
+            rmt_master_read_byte(cmd, data + size - 1, NACK_VAL);
+            rmt_master_stop(cmd);
             trig_set(1);
-            esp_err_t ret = i2c_master_cmd_begin(i2c_port, cmd, 50 / portTICK_PERIOD_MS);
+            esp_err_t ret = rmt_master_cmd_begin(rmt_port, cmd, 50 / portTICK_PERIOD_MS);
             trig_set(0);
-            i2c_cmd_link_delete(cmd);
+            rmt_cmd_link_delete(cmd);
             if (ret == ESP_OK)
             {
                 for (int k = 0; k < size; k++)
@@ -382,11 +382,11 @@ static int i2c_dump(httpd_req_t *req)
         send_string_to_ws(sendstr, req);
         sendstr[0] = 0;
     }
-    i2c_driver_delete(i2c_port);
+    rmt_driver_delete(rmt_port);
     return 0;
 }
-// write ws data from ws to i2c_cfg & run i2c cmd
-static void set_i2c_tools_data(char *jsonstr, httpd_req_t *req)
+// write ws data from ws to rmt_cfg & run i2c cmd
+static void set_rmt_tools_data(char *jsonstr, httpd_req_t *req)
 {
     char key[32];
     char value[128];
@@ -400,57 +400,57 @@ static void set_i2c_tools_data(char *jsonstr, httpd_req_t *req)
     }
     if (strncmp(key, I2C_PORT_HTML, sizeof(I2C_PORT_HTML) - 1) == 0)
     {
-        i2c_cfg.port = atoi(value);
+        rmt_cfg.port = atoi(value);
     }
     else if (strncmp(key, I2C_SCL_HTML, sizeof(I2C_SCL_HTML) - 1) == 0)
     {
-        i2c_cfg.scl = atoi(value);
+        rmt_cfg.scl = atoi(value);
     }
     else if (strncmp(key, I2C_SDA_HTML, sizeof(I2C_SDA_HTML) - 1) == 0)
     {
-        i2c_cfg.sda = atoi(value);
+        rmt_cfg.sda = atoi(value);
     }
     else if (strncmp(key, I2C_FREQ_HTML, sizeof(I2C_FREQ_HTML) - 1) == 0)
     {
-        i2c_cfg.freq = atoi(value);
+        rmt_cfg.freq = atoi(value);
     }
     else if (strncmp(key, I2C_TRIG_HTML, sizeof(I2C_TRIG_HTML) - 1) == 0)
     {
-        i2c_cfg.trig_pin = atoi(value);
-        if (i2c_cfg.trig_pin >= 0)
+        rmt_cfg.trig_pin = atoi(value);
+        if (rmt_cfg.trig_pin >= 0)
         {
-            gpio_reset_pin(i2c_cfg.trig_pin);
-            gpio_set_direction(i2c_cfg.trig_pin, GPIO_MODE_OUTPUT);
+            gpio_reset_pin(rmt_cfg.trig_pin);
+            gpio_set_direction(rmt_cfg.trig_pin, GPIO_MODE_OUTPUT);
         }
     }
     else if (strncmp(key, I2C_CHIP_HTML, sizeof(I2C_CHIP_HTML) - 1) == 0)
     {
-        // i2c_cfg.chip = atoi(value);
-        sscanf(value, "%x", &i2c_cfg.chip);
+        // rmt_cfg.chip = atoi(value);
+        sscanf(value, "%x", &rmt_cfg.chip);
     }
     else if (strncmp(key, I2C_CHIP_SIZE_HTML, sizeof(I2C_CHIP_SIZE_HTML) - 1) == 0)
     {
-        i2c_cfg.dump_size = atoi(value);
+        rmt_cfg.dump_size = atoi(value);
     }
 
     else if (strncmp(key, I2C_READ_HTML, sizeof(I2C_READ_HTML) - 1) == 0)
     {
-        // i2c_cfg.reg_read = atoi(value);
-        sscanf(value, "%x", &i2c_cfg.reg_read);
+        // rmt_cfg.reg_read = atoi(value);
+        sscanf(value, "%x", &rmt_cfg.reg_read);
     }
     else if (strncmp(key, I2C_READ_SIZE_HTML, sizeof(I2C_READ_SIZE_HTML) - 1) == 0)
     {
-        i2c_cfg.read_size = atoi(value);
+        rmt_cfg.read_size = atoi(value);
     }
 
     else if (strncmp(key, I2C_WRITE_HTML, sizeof(I2C_WRITE_HTML) - 1) == 0)
     {
-        // i2c_cfg.reg_write  = atoi(value);
-        sscanf(value, "%x", &i2c_cfg.reg_write);
+        // rmt_cfg.reg_write  = atoi(value);
+        sscanf(value, "%x", &rmt_cfg.reg_write);
     }
     else if (strncmp(key, I2C_WRITE_SIZE_HTML, sizeof(I2C_WRITE_SIZE_HTML) - 1) == 0)
     {
-        i2c_cfg.write_size = atoi(value);
+        rmt_cfg.write_size = atoi(value);
     }
     else if (strncmp(key, I2C_WRITE_DATA_HTML, sizeof(I2C_WRITE_DATA_HTML) - 1) == 0)
     {
@@ -458,8 +458,8 @@ static void set_i2c_tools_data(char *jsonstr, httpd_req_t *req)
         int idx = 0;
         while (tok != NULL)
         {
-            // i2c_cfg.write_data[idx++] = atoi(tok);
-            sscanf(tok, "%hhx", &(i2c_cfg.write_data[idx++]));
+            // rmt_cfg.write_data[idx++] = atoi(tok);
+            sscanf(tok, "%hhx", &(rmt_cfg.write_data[idx++]));
             tok = strtok(NULL, " ");
         }
     }
@@ -468,19 +468,19 @@ static void set_i2c_tools_data(char *jsonstr, httpd_req_t *req)
 
     else if (strncmp(key, I2C_SCAN_CMD, sizeof(I2C_SCAN_CMD) - 1) == 0)
     {
-        i2c_scan(req);
+        rmt_scan(req);
     }
     else if (strncmp(key, I2C_DUMP_CMD, sizeof(I2C_DUMP_CMD) - 1) == 0)
     {
-        i2c_dump(req);
+        rmt_dump(req);
     }
     else if (strncmp(key, I2C_READ_CMD, sizeof(I2C_READ_CMD) - 1) == 0)
     {
-        i2c_read(req);
+        rmt_read(req);
     }
     else if (strncmp(key, I2C_WRITE_CMD, sizeof(I2C_WRITE_CMD) - 1) == 0)
     {
-        i2c_write(req);
+        rmt_write(req);
     }
 
     else
@@ -497,12 +497,12 @@ static esp_err_t ws_handler(httpd_req_t *req)
     if (req->method == HTTP_GET)
     {
         ESP_LOGI(TAG, "Handshake done, the new connection was opened %d",httpd_req_to_sockfd(req));
-        // read & send initial i2c data from i2c_cfg
-        send_default_i2c_cfg_to_ws(req);
-        if (i2c_cfg.trig_pin >= 0)
+        // read & send initial i2c data from rmt_cfg
+        send_default_rmt_cfg_to_ws(req);
+        if (rmt_cfg.trig_pin >= 0)
         {
-            gpio_reset_pin(i2c_cfg.trig_pin);
-            gpio_set_direction(i2c_cfg.trig_pin, GPIO_MODE_OUTPUT);
+            gpio_reset_pin(rmt_cfg.trig_pin);
+            gpio_set_direction(rmt_cfg.trig_pin, GPIO_MODE_OUTPUT);
         }
         return ESP_OK;
     }
@@ -537,40 +537,40 @@ static esp_err_t ws_handler(httpd_req_t *req)
         }
     }
     // ESP_LOGI(TAG,"get cmd %s",(char *)ws_pkt.payload);
-    //  set ws data to i2c_cfg & get i2c cmd
-    set_i2c_tools_data((char *)ws_pkt.payload, req);
+    //  set ws data to rmt_cfg & get i2c cmd
+    set_rmt_tools_data((char *)ws_pkt.payload, req);
     free(buf);
     return ret;
 }
 static esp_err_t get_handler(httpd_req_t *req)
 {
-    extern const unsigned char i2c_tools_html_html_start[] asm("_binary_i2c_tools_html_html_start");
-    extern const unsigned char i2c_tools_html_html_end[] asm("_binary_i2c_tools_html_html_end");
-    const size_t i2c_tools_html_html_size = (i2c_tools_html_html_end - i2c_tools_html_html_start);
+    extern const unsigned char rmt_tools_html_html_start[] asm("_binary_rmt_tools_html_html_start");
+    extern const unsigned char rmt_tools_html_html_end[] asm("_binary_rmt_tools_html_html_end");
+    const size_t rmt_tools_html_html_size = (rmt_tools_html_html_end - rmt_tools_html_html_start);
 
-    httpd_resp_send_chunk(req, (const char *)i2c_tools_html_html_start, i2c_tools_html_html_size);
+    httpd_resp_send_chunk(req, (const char *)rmt_tools_html_html_start, rmt_tools_html_html_size);
     httpd_resp_sendstr_chunk(req, NULL);
     return ESP_OK;
 }
-static const httpd_uri_t i2c_tools_gh = {
+static const httpd_uri_t rmt_tools_gh = {
     .uri = CONFIG_I2C_TOOLS_WEB_URI,
     .method = HTTP_GET,
     .handler = get_handler,
     .user_ctx = NULL};
-static const httpd_uri_t i2c_tools_ws = {
+static const httpd_uri_t rmt_tools_ws = {
     .uri = CONFIG_I2C_TOOLS_WEB_WS_URI,
     .method = HTTP_GET,
     .handler = ws_handler,
     .user_ctx = NULL,
     .is_websocket = true};
 // register uri handler to ws server
-esp_err_t i2c_tools_register_uri_handlers(httpd_handle_t server)
+esp_err_t rmt_tools_register_uri_handlers(httpd_handle_t server)
 {
     esp_err_t ret = ESP_OK;
-    ret = httpd_register_uri_handler(server, &i2c_tools_gh);
+    ret = httpd_register_uri_handler(server, &rmt_tools_gh);
     if (ret)
         goto _ret;
-    ret = httpd_register_uri_handler(server, &i2c_tools_ws);
+    ret = httpd_register_uri_handler(server, &rmt_tools_ws);
     if (ret)
         goto _ret;
 _ret:

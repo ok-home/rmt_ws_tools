@@ -12,12 +12,12 @@
 ## How to use 
 
   - Connect as standart ESP-IDF component
-  - Start a Wi-Fi connection i2c_tools_wifi_connect() or use an existing one
-  - Run a web server i2c_tools_ws_server or use an existing web server with websocket support
-  - Register i2c_tools handlers ( web page & ws handlers) i2c_tools_register_uri_handlers(httpd_handle_t server)
+  - Start a Wi-Fi connection rmt_tools_wifi_connect() or use an existing one
+  - Run a web server rmt_tools_ws_server or use an existing web server with websocket support
+  - Register rmt_tools handlers ( web page & ws handlers) rmt_tools_register_uri_handlers(httpd_handle_t server)
   - Go to the device web page
 
-Use as example [i2c_ws_tools-example](https://github.com/ok-home/i2c_ws_tools/tree/main/i2c_ws_tools_example)
+Use as example [rmt_ws_tools-example](https://github.com/ok-home/rmt_ws_tools/tree/main/rmt_ws_tools_example)
 
 ### Configure the project
 
