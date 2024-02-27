@@ -1,11 +1,11 @@
 set( srcs
     source/rmt_tools_cmd.c
 )
-if(CONFIG_I2C_TOOLS_START_WS_SERVER)
+if(CONFIG_RMT_TOOLS_START_WS_SERVER)
     list( APPEND srcs
         source/rmt_tools_web_server.c
     )
-    if(CONFIG_I2C_TOOLS_WIFI_CONNECT)
+    if(CONFIG_RMT_TOOLS_WIFI_CONNECT)
         list( APPEND srcs
             source/rmt_tools_wifi_connect.c
     )

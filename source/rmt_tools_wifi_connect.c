@@ -153,5 +153,5 @@ esp_err_t rmt_tools_wifi_connect()
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
-    return init_sta(CONFIG_I2C_TOOLS_WIFI_SSID, CONFIG_I2C_TOOLS_WIFI_PASS);
+    return init_sta(CONFIG_RMT_TOOLS_WIFI_SSID, CONFIG_RMT_TOOLS_WIFI_PASS);
 }

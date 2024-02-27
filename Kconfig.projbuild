@@ -1,38 +1,38 @@
-menu "I2C WS Tools Configuration"
+menu "RMT WS Tools Configuration"
 
-    config I2C_TOOLS_WEB_URI
+    config RMT_TOOLS_WEB_URI
         string "Connect page URI"
-        default "/i2c"
+        default "/rmt"
         help
             WEB page URI to set ssid/pass.
 
-    config I2C_TOOLS_WEB_WS_URI
+    config RMT_TOOLS_WEB_WS_URI
         string "Connect ws URI"
-        default "/i2c/ws"
+        default "/rmt/ws"
         help
             WEB ws URI to set ssid/pass.
 
-    config I2C_TOOLS_START_WS_SERVER
+    config RMT_TOOLS_START_WS_SERVER
         bool "Start WS server"
         default y
         help
             Start new WS server, or only register_uri_handlers on existing WS server.
 
-    if  I2C_TOOLS_START_WS_SERVER
-        config I2C_TOOLS_WIFI_CONNECT
+    if  RMT_TOOLS_START_WS_SERVER
+        config RMT_TOOLS_WIFI_CONNECT
             bool "Connect wifi"
             default y
             help
                 Connect wifi or use on existing connection.
     endif
 
-    if  I2C_TOOLS_WIFI_CONNECT
-        config I2C_TOOLS_WIFI_SSID
+    if  RMT_TOOLS_WIFI_CONNECT
+        config RMT_TOOLS_WIFI_SSID
             string "wifi ssid"
             default "myssid"
             help
                 wifi ssid
-        config I2C_TOOLS_WIFI_PASS
+        config RMT_TOOLS_WIFI_PASS
             string "wifi password"
             default "mypass"
             help
