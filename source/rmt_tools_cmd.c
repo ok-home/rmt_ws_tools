@@ -6,7 +6,6 @@
    CONDITIONS OF ANY KIND, either express or implied.
 */
 #include <stdio.h>
-#include "driver/i2c.h"
 #include "esp_log.h"
 
 #include "esp_wifi.h"
@@ -20,68 +19,53 @@
 #include "jsmn.h"
 #include "rmt_tools.h"
 
-#define I2C_MASTER_TX_BUF_DISABLE 0 /*!< I2C master doesn't need buffer */
-#define I2C_MASTER_RX_BUF_DISABLE 0 /*!< I2C master doesn't need buffer */
-#define WRITE_BIT I2C_MASTER_WRITE  /*!< I2C master write */
-#define READ_BIT I2C_MASTER_READ    /*!< I2C master read */
-#define ACK_CHECK_EN 0x1            /*!< I2C master will check ack from slave*/
-#define ACK_CHECK_DIS 0x0           /*!< I2C master will not check ack from slave */
-#define ACK_VAL 0x0                 /*!< I2C ack value */
-#define NACK_VAL 0x1                /*!< I2C nack value */
 
 static const char *TAG = "rmt_tools_cmd";
 
-// web cfg
-#define I2C_PORT_HTML "i2cPortConfig"
-#define I2C_SCL_HTML "i2cSCLConfig"
-#define I2C_SDA_HTML "i2cSDAConfig"
-#define I2C_FREQ_HTML "i2cFREQConfig"
-#define I2C_TRIG_HTML "i2cTrigConfig"
+// web cfg transmit
+#define RMT_CHANNEL_OUT "RMTChannelOut"
+#define RMT_GPIO_OUT "RMTGPIOOut"
+#define RMT_CLK_OUT "RMTClkOut"
+#define RMT_LOOP_OUT "RMTLoopOut"
+#define RMT_TRIG_OUT "RMTTrigGPIO"
+#define RMT_WRITE_DATA_OUT "RMTWriteData"
+//cmd
+#define RMT_TRANSMIT_CMD "RMTStartOut"
+// web cfg receive
+#define RMT_CHANNEL_IN "RMTChannelIn"
+#define RMT_GPIO_IN "RMTGPIOIn"
+#define RMT_CLK_IN "RMTClkIn"
+#define RMT_IN_OUT_SHORT "RMTInOutShort"
+//cmd
+#define RMT_RECEIVE_CMD "RMTStartIn"
 
-#define I2C_CHIP_HTML "i2cChipAddress"
-#define I2C_CHIP_SIZE_HTML "i2cDumpSize"
-
-#define I2C_READ_HTML "i2cRegisterGetAddress"
-#define I2C_READ_SIZE_HTML "i2cRegisterGetSize"
-
-#define I2C_WRITE_HTML "i2cRegisterSetAddress"
-#define I2C_WRITE_SIZE_HTML "i2cRegisterSetSize"
-#define I2C_WRITE_DATA_HTML "i2cRegisterSetData"
-
-// web cmd
-#define I2C_SCAN_CMD "ScanCmd"
-#define I2C_DUMP_CMD "DumpCmd"
-#define I2C_READ_CMD "GetCmd"
-#define I2C_WRITE_CMD "SetCmd"
 
 typedef struct rmt_tools_cfg
 {
-    int trig_pin;           // trigger gpio
-    int port;               // i2c port ( 0/1 )
-    int scl;                // scl gpio
-    int sda;                // sda gpio
-    int freq;               // i2c frequence
-    int chip;               // device addr
-    int dump_size;          // bytes read on single dump phase
-    int reg_read;           // register addr on read cmd, -1 -> scip
-    int read_size;          // bytes read on single read phase
-    int reg_write;          // register addr on write cmd, -1 -> scip
-    int write_size;         // bytes write on single read phase
-    uint8_t write_data[32]; // data to write
+    int channel_out;         
+    int gpio_out;               
+    int clk_out;                
+    int loop_out;                
+    int trig;               
+    uint8_t data_out[64]; 
+    int data_out_len;
+
+    int channel_in;              
+    int gpio_in;          
+    int clk_in;           
+    int in_out_shot;         
+    int uint8_t data_in[64];          
+    int data_in_len;        
+
 } rmt_tools_cfg_t;
 
-static rmt_tools_cfg_t rmt_cfg =
-    {
-        .port = 0,
-        .scl = 19,
-        .sda = 18,
-        .freq = 100000,
-        .trig_pin = 21};
+static rmt_tools_cfg_t rmt_tools_cfg = {0};
+
 // set/clear trigger pin
 static void trig_set(int lvl)
 {
-    if (rmt_cfg.trig_pin != -1)
-        gpio_set_level(rmt_cfg.trig_pin, lvl);
+    if (rmt_tools_cfg.trig != -1)
+        gpio_set_level(rmt_tools_cfg.trig, lvl);
 }
 
 // simple json parse -> only one parametr name/val
@@ -121,271 +105,44 @@ static void send_string_to_ws(char *str, httpd_req_t *req)
     httpd_ws_send_frame(req, &ws_pkt);
 }
 
-static void send_default_rmt_cfg_to_ws(httpd_req_t *req)
+static void send_default_rmt_tools_cfg_to_ws(httpd_req_t *req)
 {
     char jsonstr[64] = {0};
-    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", I2C_PORT_HTML, rmt_cfg.port);
+    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", RMT_CHANNEL_OUT, rmt_tools_cfg.channel_out);
     send_string_to_ws(jsonstr, req);
-    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", I2C_FREQ_HTML, rmt_cfg.freq);
+    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", RMT_GPIO_OUT, rmt_tools_cfg.gpio_out);
     send_string_to_ws(jsonstr, req);
-    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", I2C_SCL_HTML, rmt_cfg.scl);
+    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", RMT_CLK_OUT, rmt_tools_cfg.clk_out);
     send_string_to_ws(jsonstr, req);
-    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", I2C_SDA_HTML, rmt_cfg.sda);
+    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", RMT_LOOP_OUT, rmt_tools_cfg.loop_out);
     send_string_to_ws(jsonstr, req);
-    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", I2C_TRIG_HTML, rmt_cfg.trig_pin);
+    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", RMT_TRIG_OUT, rmt_tools_cfg.trig);
     send_string_to_ws(jsonstr, req);
-}
-static esp_err_t rmt_master_driver_initialize(void)
-{
-    rmt_config_t conf = {
-        .mode = I2C_MODE_MASTER,
-        .sda_io_num = rmt_cfg.sda,
-        .sda_pullup_en = GPIO_PULLUP_ENABLE,
-        .scl_io_num = rmt_cfg.scl,
-        .scl_pullup_en = GPIO_PULLUP_ENABLE,
-        .master.clk_speed = rmt_cfg.freq,
-        // .clk_flags = 0,          /*!< Optional, you can use I2C_SCLK_SRC_FLAG_* flags to choose i2c source clock here. */
-    };
-    return rmt_param_config(rmt_cfg.port, &conf);
-}
-// scan all device on i2c bus
-static int rmt_scan(httpd_req_t *req)
-{
-    rmt_driver_install(rmt_cfg.port, I2C_MODE_MASTER, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, 0);
-    rmt_master_driver_initialize();
-    uint8_t address;
-    char adrstr[8] = {0};
-    char sendstr[80] = "     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f  ";
-    send_string_to_ws(sendstr, req);
-    for (int i = 0; i < 128; i += 16)
-    {
-        sprintf(adrstr, "%02x: ", i);
-        strcpy(sendstr, adrstr);
-        for (int j = 0; j < 16; j++)
-        {
-            address = i + j;
-            rmt_cmd_handle_t cmd = rmt_cmd_link_create();
-            rmt_master_start(cmd);
-            rmt_master_write_byte(cmd, (address << 1) | WRITE_BIT, ACK_CHECK_EN);
-            rmt_master_stop(cmd);
-            trig_set(1);
-            esp_err_t ret = rmt_master_cmd_begin(rmt_cfg.port, cmd, 50 / portTICK_PERIOD_MS);
-            trig_set(0);
-            rmt_cmd_link_delete(cmd);
-            if (ret == ESP_OK)
-            {
-                sprintf(adrstr, "%02x: ", address);
-                strcat(sendstr, adrstr);
-            }
-            else if (ret == ESP_ERR_TIMEOUT)
-            {
-                strcat(sendstr, "UU ");
-            }
-            else
-            {
-                strcat(sendstr, "-- ");
-            }
-        }
-        send_string_to_ws(sendstr, req);
-    }
-    rmt_driver_delete(rmt_cfg.port);
-    return 0;
-}
-// read data from single register on i2c device
-// if register == -1 read data only without set register addr phase
-static int rmt_read(httpd_req_t *req)
-{
-    uint8_t *data = malloc(rmt_cfg.read_size);
-    rmt_driver_install(rmt_cfg.port, I2C_MODE_MASTER, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, 0);
-    rmt_master_driver_initialize();
 
-    rmt_cmd_handle_t cmd = rmt_cmd_link_create();
-    rmt_master_start(cmd);
-    if (rmt_cfg.reg_read != -1)
-    {
-        rmt_master_write_byte(cmd, rmt_cfg.chip << 1 | WRITE_BIT, ACK_CHECK_EN);
-        rmt_master_write_byte(cmd, rmt_cfg.reg_read, ACK_CHECK_EN);
-        rmt_master_start(cmd);
-    }
-    rmt_master_write_byte(cmd, rmt_cfg.chip << 1 | READ_BIT, ACK_CHECK_EN);
-    if (rmt_cfg.read_size > 1)
-    {
-        rmt_master_read(cmd, data, rmt_cfg.read_size - 1, ACK_VAL);
-    }
-    rmt_master_read_byte(cmd, data + rmt_cfg.read_size - 1, NACK_VAL);
-    rmt_master_stop(cmd);
-    trig_set(1);
-    esp_err_t ret = rmt_master_cmd_begin(rmt_cfg.port, cmd, 1000 / portTICK_PERIOD_MS);
-    trig_set(0);
-    rmt_cmd_link_delete(cmd);
-    char datastr[8] = {0};
-    char sendstr[100];
-    sendstr[0] = 0;
-    if (ret == ESP_OK)
-    {
-        for (int i = 0; i < rmt_cfg.read_size; i++)
-        {
-            sprintf(datastr, "0x%02x ", data[i]);
-            strcat(sendstr, datastr);
-            if ((i + 1) % 16 == 0)
-            {
-                send_string_to_ws(sendstr, req);
-                sendstr[0] = 0;
-            }
-        }
-        if (rmt_cfg.read_size % 16)
-        {
-            send_string_to_ws(sendstr, req);
-            sendstr[0] = 0;
-        }
-    }
-    else if (ret == ESP_ERR_TIMEOUT)
-    {
-        ESP_LOGW(TAG, "Bus is busy");
-        send_string_to_ws("Bus is busy", req);
-    }
-    else
-    {
-        ESP_LOGW(TAG, "Read failed");
-        send_string_to_ws("Read failed", req);
-    }
-    free(data);
-    rmt_driver_delete(rmt_cfg.port);
-    return 0;
+    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", RMT_CHANNEL_IN, rmt_tools_cfg.channel_IN);
+    send_string_to_ws(jsonstr, req);
+    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", RMT_GPIO_IN, rmt_tools_cfg.gpio_in);
+    send_string_to_ws(jsonstr, req);
+    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", RMT_CLK_IN, rmt_tools_cfg.clk_in);
+    send_string_to_ws(jsonstr, req);
+    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", RMT_IN_OUT_SHORT, rmt_tools_cfg.in_out_shot);
+    send_string_to_ws(jsonstr, req);
 }
-// write data to single register on i2c device
-// if register == -1 write data only without register addr
-static int rmt_write(httpd_req_t *req)
-{
-    rmt_driver_install(rmt_cfg.port, I2C_MODE_MASTER, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, 0);
-    rmt_master_driver_initialize();
-    rmt_cmd_handle_t cmd = rmt_cmd_link_create();
-    rmt_master_start(cmd);
-    rmt_master_write_byte(cmd, rmt_cfg.chip << 1 | WRITE_BIT, ACK_CHECK_EN);
-    if (rmt_cfg.reg_write != -1)
-    {
-        rmt_master_write_byte(cmd, rmt_cfg.reg_write, ACK_CHECK_EN);
-    }
-    for (int i = 0; i < rmt_cfg.write_size; i++)
-    {
-        rmt_master_write_byte(cmd, rmt_cfg.write_data[i], ACK_CHECK_EN);
-    }
-    rmt_master_stop(cmd);
-    trig_set(1);
-    esp_err_t ret = rmt_master_cmd_begin(rmt_cfg.port, cmd, 1000 / portTICK_PERIOD_MS);
-    trig_set(0);
-    rmt_cmd_link_delete(cmd);
-    if (ret == ESP_OK)
-    {
-        ESP_LOGI(TAG, "Write OK");
-        send_string_to_ws("Write OK", req);
-    }
-    else if (ret == ESP_ERR_TIMEOUT)
-    {
-        ESP_LOGW(TAG, "Bus is busy");
-        send_string_to_ws("Bus is busy", req);
-    }
-    else
-    {
-        ESP_LOGW(TAG, "Write Failed");
-        send_string_to_ws("Write Failed", req);
-    }
-    rmt_driver_delete(rmt_cfg.port);
-    return 0;
-}
-// dump all register data from i2c device
-static int rmt_dump(httpd_req_t *req)
-{
-    int size = rmt_cfg.dump_size;
-    if (size != 1 && size != 2 && size != 4)
-    {
-        ESP_LOGE(TAG, "Wrong read size. Only support 1,2,4");
-        send_string_to_ws("Wrong read size. Only support 1,2,4", req);
-        return 1;
-    }
-    int chip_addr = rmt_cfg.chip;
-    int rmt_port = rmt_cfg.port;
 
-    rmt_driver_install(rmt_port, I2C_MODE_MASTER, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, 0);
-    rmt_master_driver_initialize();
-    uint8_t data_addr;
-    uint8_t data[4];
-    int32_t block[16];
-    char sendstr[128] = {0};
-    char tmpstr[24] = {0};
-    sprintf(sendstr, "     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f"
-                     "    0123456789abcdef");
-    send_string_to_ws(sendstr, req);
-    sendstr[0] = 0;
-    for (int i = 0; i < 128; i += 16)
-    {
-        sprintf(tmpstr, "%02x: ", i);
-        strcat(sendstr, tmpstr);
-        for (int j = 0; j < 16; j += size)
-        {
-            data_addr = i + j;
-            rmt_cmd_handle_t cmd = rmt_cmd_link_create();
-            rmt_master_start(cmd);
-            rmt_master_write_byte(cmd, chip_addr << 1 | WRITE_BIT, ACK_CHECK_EN);
-            rmt_master_write_byte(cmd, data_addr, ACK_CHECK_EN);
-            rmt_master_start(cmd);
-            rmt_master_write_byte(cmd, chip_addr << 1 | READ_BIT, ACK_CHECK_EN);
-            if (size > 1)
-            {
-                rmt_master_read(cmd, data, size - 1, ACK_VAL);
-            }
-            rmt_master_read_byte(cmd, data + size - 1, NACK_VAL);
-            rmt_master_stop(cmd);
-            trig_set(1);
-            esp_err_t ret = rmt_master_cmd_begin(rmt_port, cmd, 50 / portTICK_PERIOD_MS);
-            trig_set(0);
-            rmt_cmd_link_delete(cmd);
-            if (ret == ESP_OK)
-            {
-                for (int k = 0; k < size; k++)
-                {
-                    sprintf(tmpstr, "%02x ", data[k]);
-                    strcat(sendstr, tmpstr);
-                    block[j + k] = data[k];
-                }
-            }
-            else
-            {
-                for (int k = 0; k < size; k++)
-                {
-                    sprintf(tmpstr, "XX ");
-                    strcat(sendstr, tmpstr);
-                    block[j + k] = -1;
-                }
-            }
-        }
-        strcat(sendstr, "   ");
-        for (int k = 0; k < 16; k++)
-        {
-            // if (block[k] < 0) {
-            //     strcat(sendstr,"X");
-            // }
-            if ((block[k] & 0xff) == 0x00 || (block[k] & 0xff) == 0xff)
-            {
-                strcat(sendstr, ".");
-            }
-            else if ((block[k] & 0xff) < 32 || (block[k] & 0xff) >= 127)
-            {
-                strcat(sendstr, "?");
-            }
-            else
-            {
-                sprintf(tmpstr, "%c", (char)(block[k] & 0xff));
-                strcat(sendstr, tmpstr);
-            }
-        }
-        send_string_to_ws(sendstr, req);
-        sendstr[0] = 0;
-    }
-    rmt_driver_delete(rmt_port);
-    return 0;
+static void receive_cmd(httpd_req_t *req)
+{
+    ESP_LOGI(TAG,"RECEIVE");
+    send_string_to_ws("RECEIVE  ", req);
 }
-// write ws data from ws to rmt_cfg & run i2c cmd
+static void transmit_cmd(httpd_req_t *req)
+{
+    ESP_LOGI(TAG,"TRANSMIT");
+    send_string_to_ws("TRANSMIT  ", req);
+}
+
+
+
+// write ws data from ws to rmt_tools_cfg & run rmt cmd
 static void set_rmt_tools_data(char *jsonstr, httpd_req_t *req)
 {
     char key[32];
@@ -398,89 +155,72 @@ static void set_rmt_tools_data(char *jsonstr, httpd_req_t *req)
         send_string_to_ws(jsonstr, req);
         return;
     }
-    if (strncmp(key, I2C_PORT_HTML, sizeof(I2C_PORT_HTML) - 1) == 0)
+    if (strncmp(key, RMT_CHANNEL_OUT, sizeof(RMT_CHANNEL_OUT) - 1) == 0)
     {
-        rmt_cfg.port = atoi(value);
+        rmt_tools_cfg.channel_out = atoi(value);
     }
-    else if (strncmp(key, I2C_SCL_HTML, sizeof(I2C_SCL_HTML) - 1) == 0)
+    else if (strncmp(key, RMT_GPIO_OUT, sizeof(RMT_GPIO_OUT) - 1) == 0)
     {
-        rmt_cfg.scl = atoi(value);
+        rmt_tools_cfg.gpio_out = atoi(value);
     }
-    else if (strncmp(key, I2C_SDA_HTML, sizeof(I2C_SDA_HTML) - 1) == 0)
+    else if (strncmp(key, RMT_CLK_OUT, sizeof(RMT_CLK_OUT) - 1) == 0)
     {
-        rmt_cfg.sda = atoi(value);
+        rmt_tools_cfg.clk_out = atoi(value);
     }
-    else if (strncmp(key, I2C_FREQ_HTML, sizeof(I2C_FREQ_HTML) - 1) == 0)
+    else if (strncmp(key, RMT_LOOP_OUT, sizeof(RMT_LOOP_OUT) - 1) == 0)
     {
-        rmt_cfg.freq = atoi(value);
+        rmt_tools_cfg.loop_out = atoi(value);
     }
-    else if (strncmp(key, I2C_TRIG_HTML, sizeof(I2C_TRIG_HTML) - 1) == 0)
+    else if (strncmp(key, RMT_TRIG_OUT, sizeof(RMT_TRIG_OUT) - 1) == 0)
     {
-        rmt_cfg.trig_pin = atoi(value);
-        if (rmt_cfg.trig_pin >= 0)
+        rmt_tools_cfg.trig = atoi(value);
+        if (rmt_tools_cfg.trig >= 0)
         {
-            gpio_reset_pin(rmt_cfg.trig_pin);
-            gpio_set_direction(rmt_cfg.trig_pin, GPIO_MODE_OUTPUT);
+            gpio_reset_pin(rmt_tools_cfg.trig);
+            gpio_set_direction(rmt_tools_cfg.trig, GPIO_MODE_OUTPUT);
         }
     }
-    else if (strncmp(key, I2C_CHIP_HTML, sizeof(I2C_CHIP_HTML) - 1) == 0)
+    else if (strncmp(key, RMT_CHANNEL_IN, sizeof(RMT_CHANNEL_IN) - 1) == 0)
     {
-        // rmt_cfg.chip = atoi(value);
-        sscanf(value, "%x", &rmt_cfg.chip);
+        rmt_tools_cfg.channel_in = atoi(value);
     }
-    else if (strncmp(key, I2C_CHIP_SIZE_HTML, sizeof(I2C_CHIP_SIZE_HTML) - 1) == 0)
+    else if (strncmp(key, RMT_GPIO_IN, sizeof(RMT_GPIO_IN) - 1) == 0)
     {
-        rmt_cfg.dump_size = atoi(value);
-    }
-
-    else if (strncmp(key, I2C_READ_HTML, sizeof(I2C_READ_HTML) - 1) == 0)
-    {
-        // rmt_cfg.reg_read = atoi(value);
-        sscanf(value, "%x", &rmt_cfg.reg_read);
-    }
-    else if (strncmp(key, I2C_READ_SIZE_HTML, sizeof(I2C_READ_SIZE_HTML) - 1) == 0)
-    {
-        rmt_cfg.read_size = atoi(value);
+        rmt_tools_cfg.gpio_in = atoi(value);
     }
 
-    else if (strncmp(key, I2C_WRITE_HTML, sizeof(I2C_WRITE_HTML) - 1) == 0)
+    else if (strncmp(key, RMT_CLK_IN, sizeof(RMT_CLK_IN) - 1) == 0)
     {
-        // rmt_cfg.reg_write  = atoi(value);
-        sscanf(value, "%x", &rmt_cfg.reg_write);
+        rmt_tools_cfg.clk_in = atoi(value);
     }
-    else if (strncmp(key, I2C_WRITE_SIZE_HTML, sizeof(I2C_WRITE_SIZE_HTML) - 1) == 0)
+    else if (strncmp(key, RMT_IN_OUT_SHORT, sizeof(RMT_IN_OUT_SHORT) - 1) == 0)
     {
-        rmt_cfg.write_size = atoi(value);
+        rmt_tools_cfg.in_out_shot = atoi(value);
     }
-    else if (strncmp(key, I2C_WRITE_DATA_HTML, sizeof(I2C_WRITE_DATA_HTML) - 1) == 0)
+
+
+    else if (strncmp(key, RMT_WRITE_DATA_OUT, sizeof(RMT_WRITE_DATA_OUT) - 1) == 0)
     {
-        char *tok = strtok(value, " ");
+        char *tok = strtok(value, " ;");
         int idx = 0;
         while (tok != NULL)
         {
-            // rmt_cfg.write_data[idx++] = atoi(tok);
-            sscanf(tok, "%hhx", &(rmt_cfg.write_data[idx++]));
-            tok = strtok(NULL, " ");
+             rmt_tools_cfg.write_data[idx++] = atoi(tok);
+    //        sscanf(tok, "%hhx", &(rmt_tools_cfg.write_data[idx++]));
+            tok = strtok(NULL, " ;");
         }
+        rmt_tools_cfg.data_out_len = idx;
     }
 
     // cmd
 
-    else if (strncmp(key, I2C_SCAN_CMD, sizeof(I2C_SCAN_CMD) - 1) == 0)
+    else if (strncmp(key, RMT_TRANSMIT_CMD, sizeof(RMT_TRANSMIT_CMD) - 1) == 0)
     {
-        rmt_scan(req);
+        rmt_transmit(req);
     }
-    else if (strncmp(key, I2C_DUMP_CMD, sizeof(I2C_DUMP_CMD) - 1) == 0)
+    else if (strncmp(key, RMT_RECEIVE_CMD, sizeof(RMT_RECEIVE_CMD) - 1) == 0)
     {
-        rmt_dump(req);
-    }
-    else if (strncmp(key, I2C_READ_CMD, sizeof(I2C_READ_CMD) - 1) == 0)
-    {
-        rmt_read(req);
-    }
-    else if (strncmp(key, I2C_WRITE_CMD, sizeof(I2C_WRITE_CMD) - 1) == 0)
-    {
-        rmt_write(req);
+        rmt_receive(req);
     }
 
     else
@@ -497,12 +237,12 @@ static esp_err_t ws_handler(httpd_req_t *req)
     if (req->method == HTTP_GET)
     {
         ESP_LOGI(TAG, "Handshake done, the new connection was opened %d",httpd_req_to_sockfd(req));
-        // read & send initial i2c data from rmt_cfg
-        send_default_rmt_cfg_to_ws(req);
-        if (rmt_cfg.trig_pin >= 0)
+        // read & send initial rmt data from rmt_tools_cfg
+        send_default_rmt_tools_cfg_to_ws(req);
+        if (rmt_tools_cfg.trig >= 0)
         {
-            gpio_reset_pin(rmt_cfg.trig_pin);
-            gpio_set_direction(rmt_cfg.trig_pin, GPIO_MODE_OUTPUT);
+            gpio_reset_pin(rmt_tools_cfg.trig);
+            gpio_set_direction(rmt_tools_cfg.trig, GPIO_MODE_OUTPUT);
         }
         return ESP_OK;
     }
@@ -537,7 +277,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
         }
     }
     // ESP_LOGI(TAG,"get cmd %s",(char *)ws_pkt.payload);
-    //  set ws data to rmt_cfg & get i2c cmd
+    //  set ws data to rmt_tools_cfg & get rmt cmd
     set_rmt_tools_data((char *)ws_pkt.payload, req);
     free(buf);
     return ret;
@@ -553,12 +293,12 @@ static esp_err_t get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 static const httpd_uri_t rmt_tools_gh = {
-    .uri = CONFIG_I2C_TOOLS_WEB_URI,
+    .uri = CONFIG_RMT_TOOLS_WEB_URI,
     .method = HTTP_GET,
     .handler = get_handler,
     .user_ctx = NULL};
 static const httpd_uri_t rmt_tools_ws = {
-    .uri = CONFIG_I2C_TOOLS_WEB_WS_URI,
+    .uri = CONFIG_RMT_TOOLS_WEB_WS_URI,
     .method = HTTP_GET,
     .handler = ws_handler,
     .user_ctx = NULL,

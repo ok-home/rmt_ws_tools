@@ -164,8 +164,8 @@
             <input type="number" class="cl01" id="RMTClkOut" value="100000" step="10000" min="10000" max="10000000">
         </div>
         <div class="cl05">
-            <label class="cl01" for="RMTCircleOut">RMT Circle Out</label>
-            <input type="checkbox" class="cl01" id="RMTCircleOut" value="RMTCircleOut">
+            <label class="cl01" for="RMTLoopOut">RMT Circle Out</label>
+            <input type="checkbox" class="cl01" id="RMTLoopOut" value="RMTLoopOut">
         </div>
         <div class="cl05">
             <label class="cl01" for="RMTTrigGPIO">RMT Trigger GPIO</label>
@@ -348,7 +348,7 @@
             sock_send(JSON.stringify({ name: "RMTChannelOut", msg: document.getElementById("RMTChannelOut").value }));
             sock_send(JSON.stringify({ name: "RMTGPIOOut", msg: document.getElementById("RMTGPIOOut").value }));
             sock_send(JSON.stringify({ name: "RMTClkOut", msg: document.getElementById("RMTClkOut").value }));
-            sock_send(JSON.stringify({ name: "RMTCircleOut", msg: document.getElementById("RMTCircleOut").checked ? "1" : "0" }));
+            sock_send(JSON.stringify({ name: "RMTLoopOut", msg: document.getElementById("RMTLoopOut").checked ? "1" : "0" }));
         }
         function send_config_in_data() {
             sock_send(JSON.stringify({ name: "RMTChannelIn", msg: document.getElementById("RMTChannelIn").value }));
