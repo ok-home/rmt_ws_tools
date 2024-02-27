@@ -15,6 +15,7 @@
 #include <nvs_flash.h>
 #include "esp_netif.h"
 #include "esp_http_server.h"
+#include "driver/gpio.h"
 
 #include "jsmn.h"
 #include "rmt_tools.h"
@@ -54,7 +55,7 @@ typedef struct rmt_tools_cfg
     int gpio_in;          
     int clk_in;           
     int in_out_shot;         
-    int uint8_t data_in[64];          
+    uint8_t data_in[64];          
     int data_in_len;        
 
 } rmt_tools_cfg_t;
@@ -119,7 +120,7 @@ static void send_default_rmt_tools_cfg_to_ws(httpd_req_t *req)
     sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", RMT_TRIG_OUT, rmt_tools_cfg.trig);
     send_string_to_ws(jsonstr, req);
 
-    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", RMT_CHANNEL_IN, rmt_tools_cfg.channel_IN);
+    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", RMT_CHANNEL_IN, rmt_tools_cfg.channel_in);
     send_string_to_ws(jsonstr, req);
     sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", RMT_GPIO_IN, rmt_tools_cfg.gpio_in);
     send_string_to_ws(jsonstr, req);
@@ -129,12 +130,12 @@ static void send_default_rmt_tools_cfg_to_ws(httpd_req_t *req)
     send_string_to_ws(jsonstr, req);
 }
 
-static void receive_cmd(httpd_req_t *req)
+static void rmt_receive(httpd_req_t *req)
 {
     ESP_LOGI(TAG,"RECEIVE");
     send_string_to_ws("RECEIVE  ", req);
 }
-static void transmit_cmd(httpd_req_t *req)
+static void rmt_transmit(httpd_req_t *req)
 {
     ESP_LOGI(TAG,"TRANSMIT");
     send_string_to_ws("TRANSMIT  ", req);
@@ -205,7 +206,8 @@ static void set_rmt_tools_data(char *jsonstr, httpd_req_t *req)
         int idx = 0;
         while (tok != NULL)
         {
-             rmt_tools_cfg.write_data[idx++] = atoi(tok);
+            ESP_LOGI(TAG,"%s",tok);
+             rmt_tools_cfg.data_out[idx++] = atoi(tok);
     //        sscanf(tok, "%hhx", &(rmt_tools_cfg.write_data[idx++]));
             tok = strtok(NULL, " ;");
         }

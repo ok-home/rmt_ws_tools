@@ -165,7 +165,7 @@
         </div>
         <div class="cl05">
             <label class="cl01" for="RMTLoopOut">RMT Circle Out</label>
-            <input type="checkbox" class="cl01" id="RMTLoopOut" value="RMTLoopOut">
+            <input type="checkbox" class="cl01" id="RMTLoopOut" >
         </div>
         <div class="cl05">
             <label class="cl01" for="RMTTrigGPIO">RMT Trigger GPIO</label>
@@ -310,7 +310,7 @@
         </div>
         <div class="cl05">
             <label class="cl01" for="RMTInOutShort">RMT In/Out short</label>
-            <input type="checkbox" class="cl01" id="RMTInOutShort" value="RMTInOutShort">
+            <input type="checkbox" class="cl01" id="RMTInOutShort" >
         </div>
     </div>
     <div class="column">
@@ -363,6 +363,8 @@
                 let obj = JSON.parse(data);
                 //console.log(obj);
                 document.getElementById(obj.name).value = obj.msg;
+                if(obj.name == "RMTLoopOut" || obj.name == "RMTInOutShort")
+                { obj.msg == "1" ? document.getElementById(obj.name).checked=true:document.getElementById(obj.name).checked=false}
                 }
             catch
                 {
@@ -389,7 +391,7 @@
         
             // socket.send -> test only
             function sock_send(e) {
-                //socket.send(e);
+                socket.send(e);
                 console.log(e);
                 //textstr.value = textstr.value + "Send " + e + '\n' ;
             };
