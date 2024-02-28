@@ -170,6 +170,7 @@ receive_queue = xQueueCreate(1, sizeof(rmt_rx_done_event_data_t));
 
 ESP_ERROR_CHECK(rmt_rx_register_event_callbacks(rx_channel, &cbs, receive_queue));
 
+ESP_ERROR_CHECK(rmt_enable(rx_chan_config));
 rmt_receive_config_t receive_config = {
     .signal_range_min_ns = 100,     // the shortest duration for NEC signal is 560 µs, 1250 ns < 560 µs, valid signal is not treated as noise
     .signal_range_max_ns = 100*1000*1000, // the longest duration for NEC signal is 9000 µs, 12000000 ns > 9000 µs, the receive does not stop early
