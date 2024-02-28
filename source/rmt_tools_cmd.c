@@ -150,7 +150,7 @@ rmt_rx_event_callbacks_t cbs = {
     .on_recv_done = rmt_rx_done_callback,
 };
 
-static void rmt_receive(httpd_req_t *req)
+static void rmt_receive_tools(httpd_req_t *req)
 {
     ESP_LOGI(TAG,"RECEIVE");
     send_string_to_ws("RECEIVE  ", req);
@@ -168,9 +168,9 @@ ESP_ERROR_CHECK(rmt_new_rx_channel(&rx_chan_config, &rx_chan));
 
 receive_queue = xQueueCreate(1, sizeof(rmt_rx_done_event_data_t));
 
-ESP_ERROR_CHECK(rmt_rx_register_event_callbacks(rx_channel, &cbs, receive_queue));
+ESP_ERROR_CHECK(rmt_rx_register_event_callbacks(rx_chan, &cbs, receive_queue));
 
-ESP_ERROR_CHECK(rmt_enable(rx_chan_config));
+ESP_ERROR_CHECK(rmt_enable(rx_chan));
 rmt_receive_config_t receive_config = {
     .signal_range_min_ns = 100,     // the shortest duration for NEC signal is 560 µs, 1250 ns < 560 µs, valid signal is not treated as noise
     .signal_range_max_ns = 100*1000*1000, // the longest duration for NEC signal is 9000 µs, 12000000 ns > 9000 µs, the receive does not stop early
@@ -182,21 +182,24 @@ rmt_rx_done_event_data_t rx_data;
 xQueueReceive(receive_queue, &rx_data, portMAX_DELAY);
 // parse the received symbols
 //example_parse_nec_frame(rx_data.received_symbols, rx_data.num_symbols);
-for(int i=0;i<rx_data.num_symbols,i++)
+for(int i=0;i<rx_data.num_symbols;i++)
 {
     ESP_LOGI("received ","%d 0->%d 1->%d",i,rx_data.received_symbols[i].duration0,rx_data.received_symbols[i].duration1);
 }
 
 }
-static void rmt_transmit(httpd_req_t *req)
+static void rmt_transmit_tools(httpd_req_t *req)
 {
-    ESP_LOGI(TAG,"TRANSMIT");
+    ESP_LOGI(TAG,"TRANSMIT %d %d %d ",rmt_tools_cfg.gpio_out,rmt_tools_cfg.clk_out,rmt_tools_cfg.data_out_len);
     send_string_to_ws("TRANSMIT  ", req);
+    for(int i=0;i<rmt_tools_cfg.data_out_len;i++)
+        ESP_LOGI("DATA"," %d %ld",sizeof(rmt_symbol_word_t),rmt_tools_cfg.rmt_data_out[i].val);
     rmt_channel_handle_t tx_chan_handle = NULL;
     rmt_tx_channel_config_t tx_chan_config = {
         .clk_src = RMT_CLK_SRC_DEFAULT, // select source clock
         .gpio_num = rmt_tools_cfg.gpio_out,
         .mem_block_symbols = 64,
+        .flags.io_loop_back = 1,
         .resolution_hz = rmt_tools_cfg.clk_out,
         .trans_queue_depth = 10, // set the maximum number of transactions that can pend in the background
     };
@@ -207,10 +210,10 @@ static void rmt_transmit(httpd_req_t *req)
     ESP_ERROR_CHECK(rmt_new_copy_encoder(&tx_encoder_config, &tx_encoder));
 
     ESP_LOGI(TAG, "Enable RMT TX channel");
-    ESP_ERROR_CHECK(rmt_enable(tx_chan_config));
+    ESP_ERROR_CHECK(rmt_enable(tx_chan_handle));
     trig_set(1);
-    rmt_transmit_config_t rmt_tx_config = {};
-    ESP_ERROR_CHECK(rmt_transmit(tx_chan_handle, tx_encoder, rmt_tools_cfg.rmt_data_out, rmt_tools_cfg.data_out_len*sizeof(rmt_symbol_word_t), rmt_tx_config));
+    rmt_transmit_config_t rmt_tx_config = {0};
+    ESP_ERROR_CHECK(rmt_transmit(tx_chan_handle, tx_encoder, rmt_tools_cfg.rmt_data_out, (rmt_tools_cfg.data_out_len)*sizeof(rmt_symbol_word_t), &rmt_tx_config));
 
     if (rmt_tx_wait_all_done(tx_chan_handle, 5000) == ESP_ERR_TIMEOUT)
     {
@@ -218,6 +221,8 @@ static void rmt_transmit(httpd_req_t *req)
     }
     trig_set(0);
     rmt_del_encoder(tx_encoder);
+    rmt_disable(tx_chan_handle);
+    rmt_del_channel(tx_chan_handle);
 
     ESP_LOGI(TAG,"TRANSMIT DONE");
     send_string_to_ws("TRANSMIT DONE  ", req);
@@ -290,16 +295,16 @@ static void set_rmt_tools_data(char *jsonstr, httpd_req_t *req)
         while (tok != NULL)
         {
             ESP_LOGI(TAG,"0- %s",tok);
-            rmt_tools_cfg.data_out[idx].duration0 = atoi(tok);
-            rmt_tools_cfg.data_out[idx].level0 = 1;
+            rmt_tools_cfg.rmt_data_out[idx].duration0 = atoi(tok);
+            rmt_tools_cfg.rmt_data_out[idx].level0 = 1;
             tok = strtok(NULL, " ;");
             ESP_LOGI(TAG,"1- %s",tok);
-            rmt_tools_cfg.data_out[idx].duration1 = atoi(tok);
-            rmt_tools_cfg.data_out[idx].level1 = 0;
+            rmt_tools_cfg.rmt_data_out[idx].duration1 = atoi(tok);
+            rmt_tools_cfg.rmt_data_out[idx].level1 = 0;
             idx++;
             tok = strtok(NULL, " ;");
         }
-        rmt_tools_cfg.data_out[idx].val = 0; // stop transfer
+        rmt_tools_cfg.rmt_data_out[idx].val = 0; // stop transfer
         rmt_tools_cfg.data_out_len = idx+1;
     }
 
@@ -307,11 +312,11 @@ static void set_rmt_tools_data(char *jsonstr, httpd_req_t *req)
 
     else if (strncmp(key, RMT_TRANSMIT_CMD, sizeof(RMT_TRANSMIT_CMD) - 1) == 0)
     {
-        rmt_transmit(req);
+        rmt_transmit_tools(req);
     }
     else if (strncmp(key, RMT_RECEIVE_CMD, sizeof(RMT_RECEIVE_CMD) - 1) == 0)
     {
-        rmt_receive(req);
+        rmt_receive_tools(req);
     }
 
     else
