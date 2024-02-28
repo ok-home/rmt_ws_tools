@@ -24,8 +24,6 @@
 #include "jsmn.h"
 #include "rmt_tools.h"
 
-
-
 static const char *TAG = "rmt_tools_cmd";
 
 // web cfg transmit
@@ -35,33 +33,32 @@ static const char *TAG = "rmt_tools_cmd";
 #define RMT_LOOP_OUT "RMTLoopOut"
 #define RMT_TRIG_OUT "RMTTrigGPIO"
 #define RMT_WRITE_DATA_OUT "RMTWriteData"
-//cmd
+// cmd
 #define RMT_TRANSMIT_CMD "RMTStartOut"
 // web cfg receive
 #define RMT_CHANNEL_IN "RMTChannelIn"
 #define RMT_GPIO_IN "RMTGPIOIn"
 #define RMT_CLK_IN "RMTClkIn"
 #define RMT_IN_OUT_SHORT "RMTInOutShort"
-//cmd
+// cmd
 #define RMT_RECEIVE_CMD "RMTStartIn"
-
 
 typedef struct rmt_tools_cfg
 {
-    int channel_out;         
-    int gpio_out;               
-    int clk_out;                
-    int loop_out;                
-    int trig;               
-    rmt_symbol_word_t rmt_data_out[64]; 
+    int channel_out;
+    int gpio_out;
+    int clk_out;
+    int loop_out;
+    int trig;
+    rmt_symbol_word_t rmt_data_out[64];
     int data_out_len;
 
-    int channel_in;              
-    int gpio_in;          
-    int clk_in;           
-    int in_out_shot;         
-    rmt_symbol_word_t rmt_data_in[64];          
-    int data_in_len;        
+    int channel_in;
+    int gpio_in;
+    int clk_in;
+    int in_out_shot;
+    rmt_symbol_word_t rmt_data_in[64];
+    int data_in_len;
 
 } rmt_tools_cfg_t;
 
@@ -145,55 +142,55 @@ static bool rmt_rx_done_callback(rmt_channel_handle_t channel, const rmt_rx_done
     return high_task_wakeup == pdTRUE;
 }
 
-static QueueHandle_t receive_queue ;
+static QueueHandle_t receive_queue;
 rmt_rx_event_callbacks_t cbs = {
     .on_recv_done = rmt_rx_done_callback,
 };
 
 static void rmt_receive_tools(httpd_req_t *req)
 {
-    ESP_LOGI(TAG,"RECEIVE");
+    ESP_LOGI(TAG, "RECEIVE");
     send_string_to_ws("RECEIVE  ", req);
 
-rmt_channel_handle_t rx_chan = NULL;
-rmt_rx_channel_config_t rx_chan_config = {
-    .clk_src = RMT_CLK_SRC_DEFAULT,   // select source clock
-    .resolution_hz = rmt_tools_cfg.clk_in, // 1 MHz tick resolution, i.e., 1 tick = 1 µs
-    .mem_block_symbols = 64,          // memory block size, 64 * 4 = 256 Bytes
-    .gpio_num = rmt_tools_cfg.gpio_in,                    // GPIO number
-    .flags.invert_in = false,         // do not invert input signal
-    .flags.with_dma = false,          // do not need DMA backend
-};
-ESP_ERROR_CHECK(rmt_new_rx_channel(&rx_chan_config, &rx_chan));
+    rmt_channel_handle_t rx_chan = NULL;
+    rmt_rx_channel_config_t rx_chan_config = {
+        .clk_src = RMT_CLK_SRC_DEFAULT,        // select source clock
+        .resolution_hz = rmt_tools_cfg.clk_in, // 1 MHz tick resolution, i.e., 1 tick = 1 µs
+        .mem_block_symbols = 64,               // memory block size, 64 * 4 = 256 Bytes
+        .gpio_num = rmt_tools_cfg.gpio_in,     // GPIO number
+        .flags.invert_in = false,              // do not invert input signal
+        .flags.with_dma = false,               // do not need DMA backend
+        .flags.io_loop_back = 1,
+    };
+    ESP_ERROR_CHECK(rmt_new_rx_channel(&rx_chan_config, &rx_chan));
 
-receive_queue = xQueueCreate(1, sizeof(rmt_rx_done_event_data_t));
+    receive_queue = xQueueCreate(1, sizeof(rmt_rx_done_event_data_t));
 
-ESP_ERROR_CHECK(rmt_rx_register_event_callbacks(rx_chan, &cbs, receive_queue));
+    ESP_ERROR_CHECK(rmt_rx_register_event_callbacks(rx_chan, &cbs, receive_queue));
 
-ESP_ERROR_CHECK(rmt_enable(rx_chan));
-rmt_receive_config_t receive_config = {
-    .signal_range_min_ns = 100,     // the shortest duration for NEC signal is 560 µs, 1250 ns < 560 µs, valid signal is not treated as noise
-    .signal_range_max_ns = 100*1000*1000, // the longest duration for NEC signal is 9000 µs, 12000000 ns > 9000 µs, the receive does not stop early
-};
+    ESP_ERROR_CHECK(rmt_enable(rx_chan));
+    rmt_receive_config_t receive_config = {
+        .signal_range_min_ns = 100,        // the shortest duration for NEC signal is 560 µs, 1250 ns < 560 µs, valid signal is not treated as noise
+        .signal_range_max_ns = 100 * 1000, // the longest duration for NEC signal is 9000 µs, 12000000 ns > 9000 µs, the receive does not stop early
+    };
 
-ESP_ERROR_CHECK(rmt_receive(rx_chan, rmt_tools_cfg.rmt_data_in, sizeof(rmt_tools_cfg.rmt_data_in), &receive_config));
-// wait for the RX-done signal
-rmt_rx_done_event_data_t rx_data;
-xQueueReceive(receive_queue, &rx_data, portMAX_DELAY);
-// parse the received symbols
-//example_parse_nec_frame(rx_data.received_symbols, rx_data.num_symbols);
-for(int i=0;i<rx_data.num_symbols;i++)
-{
-    ESP_LOGI("received ","%d 0->%d 1->%d",i,rx_data.received_symbols[i].duration0,rx_data.received_symbols[i].duration1);
-}
-
+    ESP_ERROR_CHECK(rmt_receive(rx_chan, rmt_tools_cfg.rmt_data_in, sizeof(rmt_tools_cfg.rmt_data_in), &receive_config));
+    // wait for the RX-done signal
+    rmt_rx_done_event_data_t rx_data;
+    xQueueReceive(receive_queue, &rx_data, portMAX_DELAY);
+    // parse the received symbols
+    // example_parse_nec_frame(rx_data.received_symbols, rx_data.num_symbols);
+    for (int i = 0; i < rx_data.num_symbols; i++)
+    {
+        ESP_LOGI("received ", "%d 0->%d 1->%d", i, rx_data.received_symbols[i].duration0, rx_data.received_symbols[i].duration1);
+    }
 }
 static void rmt_transmit_tools(httpd_req_t *req)
 {
-    ESP_LOGI(TAG,"TRANSMIT %d %d %d ",rmt_tools_cfg.gpio_out,rmt_tools_cfg.clk_out,rmt_tools_cfg.data_out_len);
+    ESP_LOGI(TAG, "TRANSMIT %d %d %d ", rmt_tools_cfg.gpio_out, rmt_tools_cfg.clk_out, rmt_tools_cfg.data_out_len);
     send_string_to_ws("TRANSMIT  ", req);
-    for(int i=0;i<rmt_tools_cfg.data_out_len;i++)
-        ESP_LOGI("DATA"," %d %ld",sizeof(rmt_symbol_word_t),rmt_tools_cfg.rmt_data_out[i].val);
+    for (int i = 0; i < rmt_tools_cfg.data_out_len; i++)
+        ESP_LOGI("DATA", " %d %ld", sizeof(rmt_symbol_word_t), rmt_tools_cfg.rmt_data_out[i].val);
     rmt_channel_handle_t tx_chan_handle = NULL;
     rmt_tx_channel_config_t tx_chan_config = {
         .clk_src = RMT_CLK_SRC_DEFAULT, // select source clock
@@ -213,7 +210,7 @@ static void rmt_transmit_tools(httpd_req_t *req)
     ESP_ERROR_CHECK(rmt_enable(tx_chan_handle));
     trig_set(1);
     rmt_transmit_config_t rmt_tx_config = {0};
-    ESP_ERROR_CHECK(rmt_transmit(tx_chan_handle, tx_encoder, rmt_tools_cfg.rmt_data_out, (rmt_tools_cfg.data_out_len)*sizeof(rmt_symbol_word_t), &rmt_tx_config));
+    ESP_ERROR_CHECK(rmt_transmit(tx_chan_handle, tx_encoder, rmt_tools_cfg.rmt_data_out, (rmt_tools_cfg.data_out_len) * sizeof(rmt_symbol_word_t), &rmt_tx_config));
 
     if (rmt_tx_wait_all_done(tx_chan_handle, 5000) == ESP_ERR_TIMEOUT)
     {
@@ -224,12 +221,9 @@ static void rmt_transmit_tools(httpd_req_t *req)
     rmt_disable(tx_chan_handle);
     rmt_del_channel(tx_chan_handle);
 
-    ESP_LOGI(TAG,"TRANSMIT DONE");
+    ESP_LOGI(TAG, "TRANSMIT DONE");
     send_string_to_ws("TRANSMIT DONE  ", req);
-
 }
-
-
 
 // write ws data from ws to rmt_tools_cfg & run rmt cmd
 static void set_rmt_tools_data(char *jsonstr, httpd_req_t *req)
@@ -287,25 +281,24 @@ static void set_rmt_tools_data(char *jsonstr, httpd_req_t *req)
         rmt_tools_cfg.in_out_shot = atoi(value);
     }
 
-
     else if (strncmp(key, RMT_WRITE_DATA_OUT, sizeof(RMT_WRITE_DATA_OUT) - 1) == 0)
     {
         char *tok = strtok(value, " ;");
         int idx = 0;
         while (tok != NULL)
         {
-            ESP_LOGI(TAG,"0- %s",tok);
+            ESP_LOGI(TAG, "0- %s", tok);
             rmt_tools_cfg.rmt_data_out[idx].duration0 = atoi(tok);
             rmt_tools_cfg.rmt_data_out[idx].level0 = 1;
             tok = strtok(NULL, " ;");
-            ESP_LOGI(TAG,"1- %s",tok);
+            ESP_LOGI(TAG, "1- %s", tok);
             rmt_tools_cfg.rmt_data_out[idx].duration1 = atoi(tok);
             rmt_tools_cfg.rmt_data_out[idx].level1 = 0;
             idx++;
             tok = strtok(NULL, " ;");
         }
         rmt_tools_cfg.rmt_data_out[idx].val = 0; // stop transfer
-        rmt_tools_cfg.data_out_len = idx+1;
+        rmt_tools_cfg.data_out_len = idx + 1;
     }
 
     // cmd
@@ -332,7 +325,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
 {
     if (req->method == HTTP_GET)
     {
-        ESP_LOGI(TAG, "Handshake done, the new connection was opened %d",httpd_req_to_sockfd(req));
+        ESP_LOGI(TAG, "Handshake done, the new connection was opened %d", httpd_req_to_sockfd(req));
         // read & send initial rmt data from rmt_tools_cfg
         send_default_rmt_tools_cfg_to_ws(req);
         if (rmt_tools_cfg.trig >= 0)

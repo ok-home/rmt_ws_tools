@@ -249,7 +249,7 @@ void mdbCoreTask(void *pvParameters)
                         ESP_LOGE(TAG, "SETUP CONFIG LVL1 ACK not Received");
                        mdbRuntimeFlags.mdbSysCheck.setupConfig = 0;
                     }
-                    else 
+                    else  
                     {
                         ESP_LOGI(TAG, "SETUP CONFIG LVL1 ACK Received");
                         mdbRuntimeFlags.mdbSysCheck.setupConfig = 1;
