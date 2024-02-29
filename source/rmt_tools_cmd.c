@@ -132,6 +132,8 @@ static void send_default_rmt_tools_cfg_to_ws(httpd_req_t *req)
     send_string_to_ws(jsonstr, req);
 }
 
+
+
 static bool rmt_rx_done_callback(rmt_channel_handle_t channel, const rmt_rx_done_event_data_t *edata, void *user_data)
 {
     BaseType_t high_task_wakeup = pdFALSE;
@@ -147,8 +149,10 @@ rmt_rx_event_callbacks_t cbs = {
     .on_recv_done = rmt_rx_done_callback,
 };
 
-static void rmt_receive_tools(httpd_req_t *req)
+static void rmt_receive_tools(void *p)
 {
+    httpd_req_t *req = (httpd_req_t *)p;
+
     ESP_LOGI(TAG, "RECEIVE");
     send_string_to_ws("RECEIVE  ", req);
 
@@ -163,27 +167,24 @@ static void rmt_receive_tools(httpd_req_t *req)
         .flags.io_loop_back = 1,
     };
     ESP_ERROR_CHECK(rmt_new_rx_channel(&rx_chan_config, &rx_chan));
-
     receive_queue = xQueueCreate(1, sizeof(rmt_rx_done_event_data_t));
-
     ESP_ERROR_CHECK(rmt_rx_register_event_callbacks(rx_chan, &cbs, receive_queue));
-
     ESP_ERROR_CHECK(rmt_enable(rx_chan));
     rmt_receive_config_t receive_config = {
         .signal_range_min_ns = 100,        // the shortest duration for NEC signal is 560 µs, 1250 ns < 560 µs, valid signal is not treated as noise
         .signal_range_max_ns = 100 * 1000, // the longest duration for NEC signal is 9000 µs, 12000000 ns > 9000 µs, the receive does not stop early
     };
-
     ESP_ERROR_CHECK(rmt_receive(rx_chan, rmt_tools_cfg.rmt_data_in, sizeof(rmt_tools_cfg.rmt_data_in), &receive_config));
-    // wait for the RX-done signal
     rmt_rx_done_event_data_t rx_data;
     xQueueReceive(receive_queue, &rx_data, portMAX_DELAY);
-    // parse the received symbols
-    // example_parse_nec_frame(rx_data.received_symbols, rx_data.num_symbols);
     for (int i = 0; i < rx_data.num_symbols; i++)
     {
         ESP_LOGI("received ", "%d 0->%d 1->%d", i, rx_data.received_symbols[i].duration0, rx_data.received_symbols[i].duration1);
     }
+    vQueueDelete(receive_queue);
+    rmt_disable(tx_chan_handle);
+    rmt_del_channel(tx_chan_handle);
+    vTaskDelete(0);
 }
 static void rmt_transmit_tools(httpd_req_t *req)
 {
@@ -309,7 +310,8 @@ static void set_rmt_tools_data(char *jsonstr, httpd_req_t *req)
     }
     else if (strncmp(key, RMT_RECEIVE_CMD, sizeof(RMT_RECEIVE_CMD) - 1) == 0)
     {
-        rmt_receive_tools(req);
+        xTaskCreate(rmt_receive_tools,"rx_report",2048*2,(void*)&req,5,NULL);
+        //rmt_receive_tools(req);
     }
 
     else
