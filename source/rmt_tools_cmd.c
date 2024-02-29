@@ -148,12 +148,12 @@ static QueueHandle_t receive_queue;
 rmt_rx_event_callbacks_t cbs = {
     .on_recv_done = rmt_rx_done_callback,
 };
-
+httpd_req_t *reqq;
 static void rmt_receive_tools(void *p)
 {
     httpd_req_t *req = (httpd_req_t *)p;
 
-    ESP_LOGI(TAG, "RECEIVE");
+    ESP_LOGI(TAG, "RECEIVE %p",req);
     send_string_to_ws("RECEIVE  ", req);
 
     rmt_channel_handle_t rx_chan = NULL;
@@ -181,14 +181,17 @@ static void rmt_receive_tools(void *p)
     {
         ESP_LOGI("received ", "%d 0->%d 1->%d", i, rx_data.received_symbols[i].duration0, rx_data.received_symbols[i].duration1);
     }
+    //vTaskDelay(1000);
+    
     vQueueDelete(receive_queue);
-    rmt_disable(tx_chan_handle);
-    rmt_del_channel(tx_chan_handle);
+    rmt_disable(rx_chan);
+    rmt_del_channel(rx_chan);
+    ESP_LOGI(TAG, "RECEIVE DONE");
     vTaskDelete(0);
 }
 static void rmt_transmit_tools(httpd_req_t *req)
 {
-    ESP_LOGI(TAG, "TRANSMIT %d %d %d ", rmt_tools_cfg.gpio_out, rmt_tools_cfg.clk_out, rmt_tools_cfg.data_out_len);
+    ESP_LOGI(TAG, "TRANSMIT %p %d %d %d ",req, rmt_tools_cfg.gpio_out, rmt_tools_cfg.clk_out, rmt_tools_cfg.data_out_len);
     send_string_to_ws("TRANSMIT  ", req);
     for (int i = 0; i < rmt_tools_cfg.data_out_len; i++)
         ESP_LOGI("DATA", " %d %ld", sizeof(rmt_symbol_word_t), rmt_tools_cfg.rmt_data_out[i].val);
@@ -310,7 +313,9 @@ static void set_rmt_tools_data(char *jsonstr, httpd_req_t *req)
     }
     else if (strncmp(key, RMT_RECEIVE_CMD, sizeof(RMT_RECEIVE_CMD) - 1) == 0)
     {
-        xTaskCreate(rmt_receive_tools,"rx_report",2048*2,(void*)&req,5,NULL);
+            //ESP_LOGI(TAG, "RECEIVE0 %p",req);
+            reqq = req;
+        xTaskCreate(rmt_receive_tools,"rx_report",2048*2,(void*)req,5,NULL);
         //rmt_receive_tools(req);
     }
 
