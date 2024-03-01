@@ -90,19 +90,6 @@
     </div>
 
     <div class="cl1">
-        <div class="cl05">
-            <label class="cl01" for="RMTChannelOut">RMT Channel Out</label>
-            <select class="cl01" id="RMTChannelOut">
-                <option value="0" selected>0</option>
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-                <option value="6">6</option>
-                <option value="7">7</option>
-            </select>
-        </div>
 
         <div class="cl05">
             <label class="cl01" for="RMTGPIOOut">RMT GPIO Out</label>
@@ -161,7 +148,15 @@
 
         <div class="cl05">
             <label class="cl01" for="RMTClkOut">RMT Clock Out (hz)</label>
-            <input type="number" class="cl01" id="RMTClkOut" value="100000" step="10000" min="10000" max="10000000">
+            <select class="cl01" id="RMTClkOut" >
+                <option value="1000000" selected>1 MHz 1 mkSek</option>
+                <option value="2000000">2 MHz 500 nSek</option>
+                <option value="5000000">5 MHz 200 nSek</option>
+                <option value="10000000">10 MHz 100 nSek</option>
+                <option value="20000000">20 MHz 50 nSek</option>
+                <option value="40000000">40 MHz 25 nSek</option>
+                <option value="80000000">80 MHz 12.5 nSek</option>
+            </select>    
         </div>
         <div class="cl05">
             <label class="cl01" for="RMTLoopOut">RMT Circle Out</label>
@@ -222,32 +217,27 @@
                 <option value="48">48</option>
             </select>
         </div>
-        <div class="cl01">
+    <div class="cl1">
+        <div class="cl05">
+            <label class="cl01" for="RMTOutnSmkSMs">RMT Data nS mkS mS</label>
+            <select class="cl01" id="RMTOutnSmkSMs" >
+                <option value="1" >nSek</option>
+                <option value="1000" selected>mkSek</option>
+                <option value="1000000">mSek</option>
+            </select>    
+        </div>
+        <div class="cl02">
             <label class="cl01" for="RMTWriteData">RMT Write Data ( comma sparated data pair, space separated data value within pair) </label>
             <input class="cl01" id="RMTWriteData">
         </div>
+    </div>
 
     </div>
     <div class="column">
         <button class="btn" id="RMTStartOut">RMT Start Out</button>
     </div>
 
-
-
     <div class="cl1">
-        <div class="cl05">
-            <label class="cl01" for="RMTChannelIn">RMT Channel Input</label>
-            <select class="cl01" id="RMTChannelIn">
-                <option value="0" selected>0</option>
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-                <option value="6">6</option>
-                <option value="7">7</option>
-            </select>
-        </div>
 
         <div class="cl05">
             <label class="cl01" for="RMTGPIOIn">RMT GPIO Input</label>
@@ -305,8 +295,27 @@
         </div>
 
         <div class="cl05">
-            <label class="cl01" for="RMTClkIn">RMT Clock In (hz)</label>
-            <input type="number" class="cl01" id="RMTClkIn" value="100000" step="10000" min="10000" max="10000000">
+            <label class="cl01" for="RMTClkIn">RMT Clock In</label>
+            <select class="cl01" id="RMTClkIn" >
+                <option value="1000000" selected>1 MHz 1 mkSek</option>
+                <option value="2000000">2 MHz 500 nSek</option>
+                <option value="5000000">5 MHz 200 nSek</option>
+                <option value="10000000">10 MHz 100 nSek</option>
+                <option value="20000000">20 MHz 50 nSek</option>
+                <option value="40000000">40 MHz 25 nSek</option>
+                <option value="80000000">80 MHz 12.5 nSek</option>
+            </select>    
+        </div>
+        <div class="cl05">
+            <label class="cl01" for="RMTEOFMarker">RMT EOF Marker</label>
+            <select class="cl01" id="RMTEOFMarker" >
+                <option value="1000">1 mkSek</option>
+                <option value="10000">10 mkSek</option>
+                <option value="100000">100 mkSek</option>
+                <option value="1000000" >1 mSek</option>
+                <option value="10000000" selected>10 mSek</option>
+                <option value="100000000">100 mSek</option>
+            </select>
         </div>
         <div class="cl05">
             <label class="cl01" for="RMTInOutShort">RMT In/Out short</label>
@@ -328,13 +337,19 @@
         });
 
         document.getElementById("RMTStartOut").addEventListener("click", function (e) {
-            send_config_out_data();
+            sock_send(JSON.stringify({ name: "RMTGPIOOut", msg: document.getElementById("RMTGPIOOut").value }));
+            sock_send(JSON.stringify({ name: "RMTClkOut", msg: document.getElementById("RMTClkOut").value }));
+            sock_send(JSON.stringify({ name: "RMTOutnSmkSMs", msg: document.getElementById("RMTOutnSmkSMs").value }));
+            sock_send(JSON.stringify({ name: "RMTLoopOut", msg: document.getElementById("RMTLoopOut").checked ? "1" : "0" }));
             sock_send(JSON.stringify({ name: "RMTWriteData", msg: document.getElementById("RMTWriteData").value }));
             sock_send(JSON.stringify({ name: "RMTStartOut", msg: "RMTStartOut" }));
         });
 
         document.getElementById("RMTStartIn").addEventListener("click", function (e) {
-            send_config_in_data();
+            sock_send(JSON.stringify({ name: "RMTGPIOIn", msg: document.getElementById("RMTGPIOIn").value }));
+            sock_send(JSON.stringify({ name: "RMTClkIn", msg: document.getElementById("RMTClkIn").value }));
+            sock_send(JSON.stringify({ name: "RMTEOFMarker", msg: document.getElementById("RMTEOFMarker").value }));
+            sock_send(JSON.stringify({ name: "RMTInOutShort", msg: document.getElementById("RMTInOutShort").checked  ? "1" : "0"  }));
             sock_send(JSON.stringify({ name: "RMTStartIn", msg: "RMTStartIn" }));
         });
 
@@ -343,20 +358,6 @@
         socket.close();
         window.location.href = '/';
                 });
-
-        function send_config_out_data() {
-            sock_send(JSON.stringify({ name: "RMTChannelOut", msg: document.getElementById("RMTChannelOut").value }));
-            sock_send(JSON.stringify({ name: "RMTGPIOOut", msg: document.getElementById("RMTGPIOOut").value }));
-            sock_send(JSON.stringify({ name: "RMTClkOut", msg: document.getElementById("RMTClkOut").value }));
-            sock_send(JSON.stringify({ name: "RMTLoopOut", msg: document.getElementById("RMTLoopOut").checked ? "1" : "0" }));
-        }
-        function send_config_in_data() {
-            sock_send(JSON.stringify({ name: "RMTChannelIn", msg: document.getElementById("RMTChannelIn").value }));
-            sock_send(JSON.stringify({ name: "RMTGPIOIn", msg: document.getElementById("RMTGPIOIn").value }));
-            sock_send(JSON.stringify({ name: "RMTClkIn", msg: document.getElementById("RMTClkIn").value }));
-            sock_send(JSON.stringify({ name: "RMTInOutShort", msg: document.getElementById("RMTInOutShort").checked  ? "1" : "0"  }));
-        }
-
 
         function receiveWsData(data) {
             try {
