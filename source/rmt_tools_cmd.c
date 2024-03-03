@@ -199,7 +199,11 @@ static void rmt_receive_tools(void *p)
     {
         for (int i = 0; i < rx_data.num_symbols; i++)
         {
-            sprintf(sendstr, "%d 0->%d 1->%d", i, rx_data.received_symbols[i].duration0, rx_data.received_symbols[i].duration1);
+            sprintf(sendstr, "%d %d->%d ns %d->%d ns", i,
+                    rx_data.received_symbols[i].level0,
+                    rx_data.received_symbols[i].duration0*(1000000000/rmt_tools_cfg.clk_out),
+                    rx_data.received_symbols[i].level1,
+                    rx_data.received_symbols[i].duration1*(1000000000/rmt_tools_cfg.clk_out));
             send_string_to_ws(sendstr, req);
         }
     }
