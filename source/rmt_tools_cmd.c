@@ -64,13 +64,19 @@ typedef struct rmt_tools_cfg
     int gpio_in;
     int clk_in;
     int eof_marker;
-    int in_out_shot;
+    int in_out_short;
     rmt_symbol_word_t rmt_data_in[64];
     int data_in_len;
 
 } rmt_tools_cfg_t;
 
-static rmt_tools_cfg_t rmt_tools_cfg = {0};
+static rmt_tools_cfg_t rmt_tools_cfg = {
+    .clk_out = 1000000,
+    .clk_in = 1000000,
+    .rmt_ns_mks_ms = 1000,
+    .eof_marker = 100000,
+    .in_out_short = 1
+    };
 
 // set/clear trigger pin
 static void trig_set(int lvl)
@@ -138,7 +144,7 @@ static void send_default_rmt_tools_cfg_to_ws(httpd_req_t *req)
     send_string_to_ws(jsonstr, req);
     sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", RMT_EOF_MARKER, rmt_tools_cfg.eof_marker);
     send_string_to_ws(jsonstr, req);
-    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", RMT_IN_OUT_SHORT, rmt_tools_cfg.in_out_shot);
+    sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", RMT_IN_OUT_SHORT, rmt_tools_cfg.in_out_short);
     send_string_to_ws(jsonstr, req);
 }
 
@@ -156,13 +162,12 @@ static QueueHandle_t receive_queue;
 rmt_rx_event_callbacks_t cbs = {
     .on_recv_done = rmt_rx_done_callback,
 };
-httpd_req_t *reqq;
 static void rmt_receive_tools(void *p)
 {
     httpd_req_t *req = (httpd_req_t *)p;
 
-    ESP_LOGI(TAG, "RECEIVE %p", req);
-    send_string_to_ws("RECEIVE  ", req);
+    ESP_LOGI(TAG, "START RECEIVE %p", req);
+    send_string_to_ws("START RECEIVE  ", req);
 
     rmt_channel_handle_t rx_chan = NULL;
     rmt_rx_channel_config_t rx_chan_config = {
@@ -172,7 +177,7 @@ static void rmt_receive_tools(void *p)
         .gpio_num = rmt_tools_cfg.gpio_in,     // GPIO number
         .flags.invert_in = false,              // do not invert input signal
         .flags.with_dma = false,               // do not need DMA backend
-        .flags.io_loop_back = rmt_tools_cfg.in_out_shot,
+        .flags.io_loop_back = rmt_tools_cfg.in_out_short,
     };
     ESP_ERROR_CHECK(rmt_new_rx_channel(&rx_chan_config, &rx_chan));
     receive_queue = xQueueCreate(10, sizeof(rmt_rx_done_event_data_t));
@@ -194,7 +199,6 @@ static void rmt_receive_tools(void *p)
     {
         for (int i = 0; i < rx_data.num_symbols; i++)
         {
-            ESP_LOGI("received ", "%d 0->%d 1->%d", i, rx_data.received_symbols[i].duration0, rx_data.received_symbols[i].duration1);
             sprintf(sendstr, "%d 0->%d 1->%d", i, rx_data.received_symbols[i].duration0, rx_data.received_symbols[i].duration1);
             send_string_to_ws(sendstr, req);
         }
@@ -208,8 +212,8 @@ static void rmt_receive_tools(void *p)
 static void rmt_transmit_tools(void *p)
 {
     httpd_req_t *req = (httpd_req_t *)p;
-    // ESP_LOGI(TAG, "TRANSMIT %p %d %d %d ",req, rmt_tools_cfg.gpio_out, rmt_tools_cfg.clk_out, rmt_tools_cfg.data_out_len);
-    send_string_to_ws("TRANSMIT  ", req);
+    ESP_LOGI(TAG,"START TRANSMIT");
+    send_string_to_ws("START TRANSMIT  ", req);
     rmt_channel_handle_t tx_chan_handle = NULL;
     rmt_tx_channel_config_t tx_chan_config = {
         .clk_src = RMT_CLK_SRC_DEFAULT, // select source clock
@@ -224,8 +228,6 @@ static void rmt_transmit_tools(void *p)
     rmt_copy_encoder_config_t tx_encoder_config = {};
     rmt_encoder_handle_t tx_encoder = NULL;
     ESP_ERROR_CHECK(rmt_new_copy_encoder(&tx_encoder_config, &tx_encoder));
-
-    ESP_LOGI(TAG, "Enable RMT TX channel");
     ESP_ERROR_CHECK(rmt_enable(tx_chan_handle));
     trig_set(1);
     rmt_transmit_config_t rmt_tx_config = {0};
@@ -311,7 +313,7 @@ static void set_rmt_tools_data(char *jsonstr, httpd_req_t *req)
     }
     else if (strncmp(key, RMT_IN_OUT_SHORT, sizeof(RMT_IN_OUT_SHORT) - 1) == 0)
     {
-        rmt_tools_cfg.in_out_shot = atoi(value);
+        rmt_tools_cfg.in_out_short = atoi(value);
     }
 
     else if (strncmp(key, RMT_WRITE_DATA_OUT, sizeof(RMT_WRITE_DATA_OUT) - 1) == 0)
@@ -323,7 +325,6 @@ static void set_rmt_tools_data(char *jsonstr, httpd_req_t *req)
 
             rmt_tools_cfg.rmt_data_out[idx].duration0 = cvt_to_clk(tok);
             rmt_tools_cfg.rmt_data_out[idx].level0 = 1;
-            //            ESP_LOGI(TAG, "0- %s %d", tok, rmt_tools_cfg.rmt_data_out[idx].duration0);
             tok = strtok(NULL, " ;");
             if (tok == NULL)
             {
@@ -331,7 +332,6 @@ static void set_rmt_tools_data(char *jsonstr, httpd_req_t *req)
             }
             rmt_tools_cfg.rmt_data_out[idx].duration1 = cvt_to_clk(tok);
             rmt_tools_cfg.rmt_data_out[idx].level1 = 0;
-            //            ESP_LOGI(TAG, "1- %s %d", tok, rmt_tools_cfg.rmt_data_out[idx].duration1);
             idx++;
             tok = strtok(NULL, " ;");
         }
@@ -343,15 +343,11 @@ static void set_rmt_tools_data(char *jsonstr, httpd_req_t *req)
 
     else if (strncmp(key, RMT_TRANSMIT_CMD, sizeof(RMT_TRANSMIT_CMD) - 1) == 0)
     {
-        //        rmt_transmit_tools(req);
         xTaskCreate(rmt_transmit_tools, "tx_report", 2048 * 2, (void *)req, 5, NULL);
     }
     else if (strncmp(key, RMT_RECEIVE_CMD, sizeof(RMT_RECEIVE_CMD) - 1) == 0)
     {
-        // ESP_LOGI(TAG, "RECEIVE0 %p",req);
-        reqq = req;
         xTaskCreate(rmt_receive_tools, "rx_report", 2048 * 2, (void *)req, 5, NULL);
-        // rmt_receive_tools(req);
     }
 
     else
@@ -409,8 +405,6 @@ static esp_err_t ws_handler(httpd_req_t *req)
             return ret;
         }
     }
-    // ESP_LOGI(TAG,"get cmd %s",(char *)ws_pkt.payload);
-    //  set ws data to rmt_tools_cfg & get rmt cmd
     set_rmt_tools_data((char *)ws_pkt.payload, req);
     free(buf);
     return ret;

@@ -5,6 +5,8 @@
 
 ## Overview
 
+- transmits a burst of pulses, a continuous sequence of bursts of pulses
+- receives a packet of impulses
 - connects as a standard ESP-IDF component
 - can be used to test RMT devices and as an RMT signal generator for [logic_analyzer](https://github.com/ok-home/logic_analyzer)
 
