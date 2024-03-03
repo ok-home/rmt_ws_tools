@@ -26,6 +26,7 @@
 
 static const char *TAG = "rmt_tools_cmd";
 
+#define RMT_TIMEOUT_MS (10000)
 // web cfg transmit
 #define RMT_GPIO_OUT "RMTGPIOOut"
 #define RMT_CLK_OUT "RMTClkOut"
@@ -171,7 +172,7 @@ static void rmt_receive_tools(void *p)
         .gpio_num = rmt_tools_cfg.gpio_in,     // GPIO number
         .flags.invert_in = false,              // do not invert input signal
         .flags.with_dma = false,               // do not need DMA backend
-        .flags.io_loop_back = 1,
+        .flags.io_loop_back = rmt_tools_cfg.in_out_shot,
     };
     ESP_ERROR_CHECK(rmt_new_rx_channel(&rx_chan_config, &rx_chan));
     receive_queue = xQueueCreate(10, sizeof(rmt_rx_done_event_data_t));
@@ -184,15 +185,20 @@ static void rmt_receive_tools(void *p)
     ESP_ERROR_CHECK(rmt_receive(rx_chan, rmt_tools_cfg.rmt_data_in, sizeof(rmt_tools_cfg.rmt_data_in), &receive_config));
     rmt_rx_done_event_data_t rx_data;
     char sendstr[128];
-    xQueueReceive(receive_queue, &rx_data, portMAX_DELAY);
-    for (int i = 0; i < rx_data.num_symbols; i++)
+    if (xQueueReceive(receive_queue, &rx_data, RMT_TIMEOUT_MS / portTICK_PERIOD_MS) == pdFALSE)
     {
-        ESP_LOGI("received ", "%d 0->%d 1->%d", i, rx_data.received_symbols[i].duration0, rx_data.received_symbols[i].duration1);
-        sprintf(sendstr, "%d 0->%d 1->%d", i, rx_data.received_symbols[i].duration0, rx_data.received_symbols[i].duration1);
-        send_string_to_ws(sendstr, req);
+        ESP_LOGI(TAG, "RMT RECEIVE TIMEOUT 10 sec");
+        send_string_to_ws("RMT RECEIVE TIMEOUT 10 sec", req);
     }
-    // vTaskDelay(1000);
-
+    else
+    {
+        for (int i = 0; i < rx_data.num_symbols; i++)
+        {
+            ESP_LOGI("received ", "%d 0->%d 1->%d", i, rx_data.received_symbols[i].duration0, rx_data.received_symbols[i].duration1);
+            sprintf(sendstr, "%d 0->%d 1->%d", i, rx_data.received_symbols[i].duration0, rx_data.received_symbols[i].duration1);
+            send_string_to_ws(sendstr, req);
+        }
+    }
     vQueueDelete(receive_queue);
     rmt_disable(rx_chan);
     rmt_del_channel(rx_chan);
@@ -204,8 +210,6 @@ static void rmt_transmit_tools(void *p)
     httpd_req_t *req = (httpd_req_t *)p;
     // ESP_LOGI(TAG, "TRANSMIT %p %d %d %d ",req, rmt_tools_cfg.gpio_out, rmt_tools_cfg.clk_out, rmt_tools_cfg.data_out_len);
     send_string_to_ws("TRANSMIT  ", req);
-    for (int i = 0; i < rmt_tools_cfg.data_out_len; i++)
-        ESP_LOGI("DATA", " %d %ld", sizeof(rmt_symbol_word_t), rmt_tools_cfg.rmt_data_out[i].val);
     rmt_channel_handle_t tx_chan_handle = NULL;
     rmt_tx_channel_config_t tx_chan_config = {
         .clk_src = RMT_CLK_SRC_DEFAULT, // select source clock
@@ -224,24 +228,27 @@ static void rmt_transmit_tools(void *p)
     ESP_LOGI(TAG, "Enable RMT TX channel");
     ESP_ERROR_CHECK(rmt_enable(tx_chan_handle));
     trig_set(1);
-    rmt_transmit_config_t rmt_tx_config = {
-        //.loop_count = 5,
-        };
-        for(int i=0;i<20;i++){
-    ESP_ERROR_CHECK(rmt_transmit(tx_chan_handle, tx_encoder, rmt_tools_cfg.rmt_data_out, (rmt_tools_cfg.data_out_len) * sizeof(rmt_symbol_word_t), &rmt_tx_config));
-        }
-    if (rmt_tx_wait_all_done(tx_chan_handle, 5000) == ESP_ERR_TIMEOUT)
+    rmt_transmit_config_t rmt_tx_config = {0};
+    if (rmt_tools_cfg.loop_out)
     {
-        ESP_LOGI(TAG, "RMT TIMEOUT 5sec");
+        rmt_tx_config.loop_count = -1;
     }
-    
+    //    for(int i=0;i<20;i++){
+    ESP_ERROR_CHECK(rmt_transmit(tx_chan_handle, tx_encoder, rmt_tools_cfg.rmt_data_out, (rmt_tools_cfg.data_out_len) * sizeof(rmt_symbol_word_t), &rmt_tx_config));
+    //    }
+    if (rmt_tx_wait_all_done(tx_chan_handle, RMT_TIMEOUT_MS) == ESP_ERR_TIMEOUT)
+    {
+        ESP_LOGI(TAG, "RMT TIMEOUT 10 sec");
+        send_string_to_ws("RMT TIMEOUT 10 sec", req);
+    }
+
     trig_set(0);
-    rmt_del_encoder(tx_encoder);
     rmt_disable(tx_chan_handle);
+    rmt_del_encoder(tx_encoder);
     rmt_del_channel(tx_chan_handle);
 
     ESP_LOGI(TAG, "TRANSMIT DONE");
-    send_string_to_ws("TRANSMIT DONE  ", req);
+    send_string_to_ws("TRANSMIT DONE ", req);
     vTaskDelete(0);
 }
 
@@ -316,7 +323,7 @@ static void set_rmt_tools_data(char *jsonstr, httpd_req_t *req)
 
             rmt_tools_cfg.rmt_data_out[idx].duration0 = cvt_to_clk(tok);
             rmt_tools_cfg.rmt_data_out[idx].level0 = 1;
-            ESP_LOGI(TAG, "0- %s %d", tok, rmt_tools_cfg.rmt_data_out[idx].duration0);
+            //            ESP_LOGI(TAG, "0- %s %d", tok, rmt_tools_cfg.rmt_data_out[idx].duration0);
             tok = strtok(NULL, " ;");
             if (tok == NULL)
             {
@@ -324,7 +331,7 @@ static void set_rmt_tools_data(char *jsonstr, httpd_req_t *req)
             }
             rmt_tools_cfg.rmt_data_out[idx].duration1 = cvt_to_clk(tok);
             rmt_tools_cfg.rmt_data_out[idx].level1 = 0;
-            ESP_LOGI(TAG, "1- %s %d", tok, rmt_tools_cfg.rmt_data_out[idx].duration1);
+            //            ESP_LOGI(TAG, "1- %s %d", tok, rmt_tools_cfg.rmt_data_out[idx].duration1);
             idx++;
             tok = strtok(NULL, " ;");
         }
@@ -336,9 +343,8 @@ static void set_rmt_tools_data(char *jsonstr, httpd_req_t *req)
 
     else if (strncmp(key, RMT_TRANSMIT_CMD, sizeof(RMT_TRANSMIT_CMD) - 1) == 0)
     {
-//        rmt_transmit_tools(req);
+        //        rmt_transmit_tools(req);
         xTaskCreate(rmt_transmit_tools, "tx_report", 2048 * 2, (void *)req, 5, NULL);
-
     }
     else if (strncmp(key, RMT_RECEIVE_CMD, sizeof(RMT_RECEIVE_CMD) - 1) == 0)
     {

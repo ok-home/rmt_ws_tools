@@ -61,6 +61,14 @@
             margin-bottom: 2px;
         }
 
+        .cl34 {
+            float: left;
+            width: 74%;
+            text-align: center;
+            margin-top: 2px;
+            margin-bottom: 2px;
+        }
+
         .cl05 {
             float: left;
             width: 19%;
@@ -91,7 +99,7 @@
 
     <div class="cl1">
 
-        <div class="cl05">
+        <div class="cl04">
             <label class="cl01" for="RMTGPIOOut">RMT GPIO Out</label>
             <select class="cl01" id="RMTGPIOOut">
                 <option value="0" selected>0</option>
@@ -146,9 +154,9 @@
             </select>
         </div>
 
-        <div class="cl05">
+        <div class="cl04">
             <label class="cl01" for="RMTClkOut">RMT Clock Out (hz)</label>
-            <select class="cl01" id="RMTClkOut" >
+            <select class="cl01" id="RMTClkOut">
                 <option value="1000000" selected>1 MHz 1 mkSek</option>
                 <option value="2000000">2 MHz 500 nSek</option>
                 <option value="5000000">5 MHz 200 nSek</option>
@@ -156,13 +164,13 @@
                 <option value="20000000">20 MHz 50 nSek</option>
                 <option value="40000000">40 MHz 25 nSek</option>
                 <option value="80000000">80 MHz 12.5 nSek</option>
-            </select>    
+            </select>
         </div>
-        <div class="cl05">
-            <label class="cl01" for="RMTLoopOut">RMT Circle Out</label>
-            <input type="checkbox" class="cl01" id="RMTLoopOut" >
+        <div class="cl04">
+            <label class="cl01" for="RMTLoopOut">RMT loop 10 sek</label>
+            <input type="checkbox" class="cl01" id="RMTLoopOut">
         </div>
-        <div class="cl05">
+        <div class="cl04">
             <label class="cl01" for="RMTTrigGPIO">RMT Trigger GPIO</label>
             <select class="cl01" id="RMTTrigGPIO">
                 <option value="-1" selected>Disable</option>
@@ -217,29 +225,29 @@
                 <option value="48">48</option>
             </select>
         </div>
-    <div class="cl1">
-        <div class="cl05">
-            <label class="cl01" for="RMTOutnSmkSMs">RMT Data nS mkS mS</label>
-            <select class="cl01" id="RMTOutnSmkSMs" >
-                <option value="1" >nSek</option>
-                <option value="1000" selected>mkSek</option>
-                <option value="1000000">mSek</option>
-            </select>    
+        <div class="cl1">
+            <div class="cl04">
+                <label class="cl01" for="RMTOutnSmkSMs">RMT Data nS mkS mS</label>
+                <select class="cl01" id="RMTOutnSmkSMs">
+                    <option value="1">nSek</option>
+                    <option value="1000" selected>mkSek</option>
+                    <option value="1000000">mSek</option>
+                </select>
+            </div>
+            <div class="cl34">
+                <label class="cl01" for="RMTWriteData">RMT Transmit Data ( comma sparated data pair ) </label>
+                <input class="cl01" id="RMTWriteData">
+            </div>
         </div>
-        <div class="cl02">
-            <label class="cl01" for="RMTWriteData">RMT Write Data ( comma sparated data pair, space separated data value within pair) </label>
-            <input class="cl01" id="RMTWriteData">
-        </div>
-    </div>
 
     </div>
     <div class="column">
-        <button class="btn" id="RMTStartOut">RMT Start Out</button>
+        <button class="btn" id="RMTStartOut">RMT Transmit</button>
     </div>
 
     <div class="cl1">
 
-        <div class="cl05">
+        <div class="cl04">
             <label class="cl01" for="RMTGPIOIn">RMT GPIO Input</label>
             <select class="cl01" id="RMTGPIOIn">
                 <option value="0" selected>0</option>
@@ -294,9 +302,9 @@
             </select>
         </div>
 
-        <div class="cl05">
+        <div class="cl04">
             <label class="cl01" for="RMTClkIn">RMT Clock In</label>
-            <select class="cl01" id="RMTClkIn" >
+            <select class="cl01" id="RMTClkIn">
                 <option value="1000000" selected>1 MHz 1 mkSek</option>
                 <option value="2000000">2 MHz 500 nSek</option>
                 <option value="5000000">5 MHz 200 nSek</option>
@@ -304,30 +312,34 @@
                 <option value="20000000">20 MHz 50 nSek</option>
                 <option value="40000000">40 MHz 25 nSek</option>
                 <option value="80000000">80 MHz 12.5 nSek</option>
-            </select>    
+            </select>
         </div>
-        <div class="cl05">
+        <div class="cl04">
             <label class="cl01" for="RMTEOFMarker">RMT EOF Marker</label>
-            <select class="cl01" id="RMTEOFMarker" >
+            <select class="cl01" id="RMTEOFMarker">
                 <option value="1000">1 mkSek</option>
                 <option value="10000">10 mkSek</option>
                 <option value="100000">100 mkSek</option>
-                <option value="1000000" >1 mSek</option>
+                <option value="1000000">1 mSek</option>
                 <option value="10000000" selected>10 mSek</option>
                 <option value="100000000">100 mSek</option>
             </select>
         </div>
-        <div class="cl05">
+        <div class="cl04">
             <label class="cl01" for="RMTInOutShort">RMT In/Out short</label>
-            <input type="checkbox" class="cl01" id="RMTInOutShort" >
+            <input type="checkbox" class="cl01" id="RMTInOutShort">
         </div>
     </div>
     <div class="column">
-        <button class="btn" id="RMTStartIn">RMT Start Input</button>
+        <button class="btn" id="RMTStartIn">RMT Receive (10 sek timeout)</button>
     </div>
+    <div class="cl1">
+        <div id="LogArea" class="cl02">
+            <textarea id="logtext" rows="24" cols="40"></textarea>
+        </div>
+        <div class="cl02">
 
-    <div id="LogArea" class="cl1">
-        <textarea id="logtext" rows="24" cols="80"></textarea>
+        </div>
     </div>
 
     <script>
@@ -349,29 +361,28 @@
             sock_send(JSON.stringify({ name: "RMTGPIOIn", msg: document.getElementById("RMTGPIOIn").value }));
             sock_send(JSON.stringify({ name: "RMTClkIn", msg: document.getElementById("RMTClkIn").value }));
             sock_send(JSON.stringify({ name: "RMTEOFMarker", msg: document.getElementById("RMTEOFMarker").value }));
-            sock_send(JSON.stringify({ name: "RMTInOutShort", msg: document.getElementById("RMTInOutShort").checked  ? "1" : "0"  }));
+            sock_send(JSON.stringify({ name: "RMTInOutShort", msg: document.getElementById("RMTInOutShort").checked ? "1" : "0" }));
             sock_send(JSON.stringify({ name: "RMTStartIn", msg: "RMTStartIn" }));
         });
 
         document.getElementById("goHome").addEventListener("click", function (e) {
-        //onclick="window.location.href = '/'"
-        socket.close();
-        window.location.href = '/';
-                });
+            //onclick="window.location.href = '/'"
+            socket.close();
+            window.location.href = '/';
+        });
 
         function receiveWsData(data) {
             try {
                 let obj = JSON.parse(data);
                 //console.log(obj);
                 document.getElementById(obj.name).value = obj.msg;
-                if(obj.name == "RMTLoopOut" || obj.name == "RMTInOutShort")
-                { obj.msg == "1" ? document.getElementById(obj.name).checked=true:document.getElementById(obj.name).checked=false}
-                }
+                if (obj.name == "RMTLoopOut" || obj.name == "RMTInOutShort") { obj.msg == "1" ? document.getElementById(obj.name).checked = true : document.getElementById(obj.name).checked = false }
+            }
             catch
-                {
+            {
                 //console.log("catch" + data);
-                textstr.value = textstr.value + "Receive "  + data + '\n';
-                }
+                textstr.value = textstr.value + "Receive " + data + '\n';
+            }
         }
     </script>
 
@@ -381,7 +392,7 @@
     <script> // основной старт скрипта, открыть сокет
         // создать сокет по адресу
         let protocol = "ws:"
-        if(document.location.protocol == "https:") protocol = "wss:"
+        if (document.location.protocol == "https:") protocol = "wss:"
         let wsHostStr = protocol + "//" + document.location.host + document.location.pathname;
         wsHostStr += (document.location.pathname == '/') ? "ws" : "/ws";
         var socket = new WebSocket(wsHostStr);
@@ -389,28 +400,28 @@
     </script>
 
     <script> // события WS
-        
-            // socket.send -> test only
-            function sock_send(e) {
-                socket.send(e);
-                console.log(e);
-                //textstr.value = textstr.value + "Send " + e + '\n' ;
-            };
 
-            socket.onopen = function () {
-                console.log("connect");
-            };
-            socket.onclose = function (event) {
-                console.log("close");
-//                setTimeout(() => document.location.reload(), 2000);
-            };
-            socket.onerror = function () {
-                console.log("error");
-//                setTimeout(() => document.location.reload(), 2000);
-            };
-            socket.onmessage = function (event) {
-                receiveWsData(event.data);
-            };
+        // socket.send -> test only
+        function sock_send(e) {
+            socket.send(e);
+            console.log(e);
+            //textstr.value = textstr.value + "Send " + e + '\n' ;
+        };
+
+        socket.onopen = function () {
+            console.log("connect");
+        };
+        socket.onclose = function (event) {
+            console.log("close");
+            //                setTimeout(() => document.location.reload(), 2000);
+        };
+        socket.onerror = function () {
+            console.log("error");
+            //                setTimeout(() => document.location.reload(), 2000);
+        };
+        socket.onmessage = function (event) {
+            receiveWsData(event.data);
+        };
     </script>
 
 </body>
