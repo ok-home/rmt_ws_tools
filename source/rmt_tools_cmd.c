@@ -115,40 +115,40 @@ static esp_err_t json_to_str_parm(char *jsonstr, char *nameStr, char *valStr) //
     return ESP_OK;
 }
 // send string to ws
-static void send_string_to_ws(char *str, httpd_req_t *req)
+static void send_string_to_ws(char *str)
 {
     httpd_ws_frame_t ws_pkt;
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
     ws_pkt.type = HTTPD_WS_TYPE_TEXT;
     ws_pkt.payload = (uint8_t *)str;
     ws_pkt.len = strlen(str);
-    // httpd_ws_send_frame(req, &ws_pkt);
+
     httpd_ws_send_frame_async(ra.hd, ra.fd, &ws_pkt);
     // httpd_ws_send_data(ra.hd, ra.fd, &ws_pkt);
 }
 
-static void send_default_rmt_tools_cfg_to_ws(httpd_req_t *req)
+static void send_default_rmt_tools_cfg_to_ws()
 {
     char jsonstr[64] = {0};
     sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", RMT_GPIO_OUT, rmt_tools_cfg.gpio_out);
-    send_string_to_ws(jsonstr, req);
+    send_string_to_ws(jsonstr);
     sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", RMT_CLK_OUT, rmt_tools_cfg.clk_out);
-    send_string_to_ws(jsonstr, req);
+    send_string_to_ws(jsonstr);
     sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", RMT_NS_MKS_MS, rmt_tools_cfg.rmt_ns_mks_ms);
-    send_string_to_ws(jsonstr, req);
+    send_string_to_ws(jsonstr);
     sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", RMT_LOOP_OUT, rmt_tools_cfg.loop_out);
-    send_string_to_ws(jsonstr, req);
+    send_string_to_ws(jsonstr);
     sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", RMT_TRIG_OUT, rmt_tools_cfg.trig);
-    send_string_to_ws(jsonstr, req);
+    send_string_to_ws(jsonstr);
 
     sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", RMT_GPIO_IN, rmt_tools_cfg.gpio_in);
-    send_string_to_ws(jsonstr, req);
+    send_string_to_ws(jsonstr);
     sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", RMT_CLK_IN, rmt_tools_cfg.clk_in);
-    send_string_to_ws(jsonstr, req);
+    send_string_to_ws(jsonstr);
     sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", RMT_EOF_MARKER, rmt_tools_cfg.eof_marker);
-    send_string_to_ws(jsonstr, req);
+    send_string_to_ws(jsonstr);
     sprintf(jsonstr, "{\"name\":\"%s\",\"msg\":\"%d\"}", RMT_IN_OUT_SHORT, rmt_tools_cfg.in_out_short);
-    send_string_to_ws(jsonstr, req);
+    send_string_to_ws(jsonstr);
 }
 
 static bool rmt_rx_done_callback(rmt_channel_handle_t channel, const rmt_rx_done_event_data_t *edata, void *user_data)
@@ -165,10 +165,10 @@ static QueueHandle_t receive_queue;
 
 static void rmt_receive_tools(void *p)
 {
-    httpd_req_t *req = (httpd_req_t *)p;
 
-    ESP_LOGI(TAG, "START RECEIVE %p", req);
-    send_string_to_ws("START RECEIVE  ", req);
+
+    ESP_LOGI(TAG, "START RECEIVE");
+    send_string_to_ws("START RECEIVE  ");
 
     rmt_channel_handle_t rx_chan = NULL;
     rmt_rx_channel_config_t rx_chan_config = {
@@ -197,7 +197,7 @@ static void rmt_receive_tools(void *p)
     if (xQueueReceive(receive_queue, &rx_data, RMT_TIMEOUT_MS / portTICK_PERIOD_MS) == pdFALSE)
     {
         ESP_LOGI(TAG, "RMT RECEIVE TIMEOUT 10 sec");
-        send_string_to_ws("RMT RECEIVE TIMEOUT 10 sec", req);
+        send_string_to_ws("RMT RECEIVE TIMEOUT 10 sec");
     }
     else
     {
@@ -222,7 +222,7 @@ static void rmt_receive_tools(void *p)
                     rx_data.received_symbols[i].level1,
                     rx_data.received_symbols[i].duration1*(1000000000/rmt_tools_cfg.clk_out));
 */                    
-            send_string_to_ws(sendstr, req);
+            send_string_to_ws(sendstr);
         }
 
     }
@@ -237,9 +237,9 @@ static void rmt_receive_tools(void *p)
 }
 static void rmt_transmit_tools(void *p)
 {
-    httpd_req_t *req = (httpd_req_t *)p;
+
     ESP_LOGI(TAG,"START TRANSMIT");
-    send_string_to_ws("START TRANSMIT  ", req);
+    send_string_to_ws("START TRANSMIT  ");
     rmt_channel_handle_t tx_chan_handle = NULL;
     rmt_tx_channel_config_t tx_chan_config = {
         .clk_src = RMT_CLK_SRC_DEFAULT, // select source clock
@@ -267,7 +267,7 @@ static void rmt_transmit_tools(void *p)
     if (rmt_tx_wait_all_done(tx_chan_handle, RMT_TIMEOUT_MS) == ESP_ERR_TIMEOUT)
     {
         ESP_LOGI(TAG, "RMT TIMEOUT 10 sec");
-        send_string_to_ws("RMT TIMEOUT 10 sec", req);
+        send_string_to_ws("RMT TIMEOUT 10 sec");
     }
 
     trig_set(0);
@@ -276,7 +276,7 @@ static void rmt_transmit_tools(void *p)
     rmt_del_channel(tx_chan_handle);
 
     ESP_LOGI(TAG, "TRANSMIT DONE");
-    send_string_to_ws("TRANSMIT DONE ", req);
+    send_string_to_ws("TRANSMIT DONE ");
     rmt_transmit_started = 0;
     vTaskDelete(0);
 }
@@ -288,7 +288,7 @@ int cvt_to_clk(char *tok)
     return (data * f) / 1000;
 }
 // write ws data from ws to rmt_tools_cfg & run rmt cmd
-static void set_rmt_tools_data(char *jsonstr, httpd_req_t *req)
+static void set_rmt_tools_data(char *jsonstr)
 {
     char key[32];
     char value[128];
@@ -296,8 +296,8 @@ static void set_rmt_tools_data(char *jsonstr, httpd_req_t *req)
     if (err)
     {
         ESP_LOGE(TAG, "ERR jsonstr %s", jsonstr);
-        send_string_to_ws("ERR jsonstr", req);
-        send_string_to_ws(jsonstr, req);
+        send_string_to_ws("ERR jsonstr");
+        send_string_to_ws(jsonstr);
         return;
     }
     if (strncmp(key, RMT_GPIO_OUT, sizeof(RMT_GPIO_OUT) - 1) == 0)
@@ -376,14 +376,14 @@ static void set_rmt_tools_data(char *jsonstr, httpd_req_t *req)
     else if (strncmp(key, RMT_TRANSMIT_CMD, sizeof(RMT_TRANSMIT_CMD) - 1) == 0)
     {
         if( !rmt_transmit_started ){
-        xTaskCreate(rmt_transmit_tools, "tx_report", 2048 * 2, (void *)req, 5, NULL);
+        xTaskCreate(rmt_transmit_tools, "tx_report", 2048 * 2, NULL, 5, NULL);
         rmt_transmit_started = 1;
         } else {goto _err_ret;}
     }
     else if (strncmp(key, RMT_RECEIVE_CMD, sizeof(RMT_RECEIVE_CMD) - 1) == 0)
     {
         if( !rmt_receive_started ){
-        xTaskCreate(rmt_receive_tools, "rx_report", 2048 * 2, (void *)req, 5, NULL);
+        xTaskCreate(rmt_receive_tools, "rx_report", 2048 * 2, NULL, 5, NULL);
         rmt_receive_started = 1;
         } else {goto _err_ret;}
     }
@@ -394,8 +394,8 @@ static void set_rmt_tools_data(char *jsonstr, httpd_req_t *req)
     return;
 _err_ret:
     ESP_LOGE(TAG, "ERR cmd %s", jsonstr);
-    send_string_to_ws("ERR cmd", req);
-    send_string_to_ws(jsonstr, req);
+    send_string_to_ws("ERR cmd");
+    send_string_to_ws(jsonstr);
     return;
 }
 static esp_err_t ws_handler(httpd_req_t *req)
@@ -404,9 +404,9 @@ static esp_err_t ws_handler(httpd_req_t *req)
     {
         ra.hd = req->handle;
         ra.fd = httpd_req_to_sockfd(req);
-        ESP_LOGI(TAG, "Handshake done, the new connection was opened %d", httpd_req_to_sockfd(req));
+        ESP_LOGI(TAG, "Handshake done, the new connection was opened %d", ra.fd);
         // read & send initial rmt data from rmt_tools_cfg
-        send_default_rmt_tools_cfg_to_ws(req);
+        send_default_rmt_tools_cfg_to_ws();
         if (rmt_tools_cfg.trig >= 0)
         {
             gpio_reset_pin(rmt_tools_cfg.trig);
@@ -444,7 +444,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
             return ret;
         }
     }
-    set_rmt_tools_data((char *)ws_pkt.payload, req);
+    set_rmt_tools_data((char *)ws_pkt.payload);
     free(buf);
     return ret;
 }
