@@ -203,14 +203,14 @@ static void rmt_receive_tools(void *p)
         for (int i = 0; i < rx_data.num_symbols; i++)
         {
             char *s0;
-            int d0 = rx_data.received_symbols[i].duration0*(1000000000/rmt_tools_cfg.clk_out);
+            int d0 = rx_data.received_symbols[i].duration0*(1000000000/rmt_tools_cfg.clk_in);
             if (d0 < 1000) {s0 = "nS";}
             else if ((d0 < 1000000)){s0 = "mkS"; d0/=1000;}
             else {s0 = "mS"; d0/=1000000;}
             char *s1;
-            int d1 = rx_data.received_symbols[i].duration1*(1000000000/rmt_tools_cfg.clk_out);
+            int d1 = rx_data.received_symbols[i].duration1*(1000000000/rmt_tools_cfg.clk_in);
             if (d1 < 1000) {s1 = "nS";}
-            else if ((d1 < 1000000)){s1 = "mkS"; d0/=1000;}
+            else if ((d1 < 1000000)){s1 = "mkS"; d1/=1000;}
             else {s1 = "mS"; d1/=1000000;}
 
         sprintf(sendstr, "%d %d->%d %s %d->%d %s",i,rx_data.received_symbols[i].level0,d0,s0,rx_data.received_symbols[i].level1,d1,s1);
@@ -291,23 +291,21 @@ static void set_rmt_tools_data(char *jsonstr)
 {
     char key[32];
     char value[128];
+    char *errstr="???";
     esp_err_t err = json_to_str_parm(jsonstr, key, value); // decode json string to key/value pair
     if (err)
     {
         ESP_LOGE(TAG, "ERR jsonstr %s", jsonstr);
         send_string_to_ws("ERR jsonstr");
-        send_string_to_ws(jsonstr);
         return;
     }
     if (strncmp(key, RMT_GPIO_OUT, sizeof(RMT_GPIO_OUT) - 1) == 0)
     {
         rmt_tools_cfg.gpio_out = atoi(value);
-        if(!GPIO_IS_VALID_GPIO(rmt_tools_cfg.gpio_out)){goto _err_ret;}
     }
     else if (strncmp(key, RMT_CLK_OUT, sizeof(RMT_CLK_OUT) - 1) == 0)
     {
         rmt_tools_cfg.clk_out = atoi(value);
-        if(rmt_tools_cfg.clk_out<(160000000/255) || rmt_tools_cfg.clk_out>(160000000/2) ){goto _err_ret;}
     }
     else if (strncmp(key, RMT_NS_MKS_MS, sizeof(RMT_NS_MKS_MS) - 1) == 0)
     {
@@ -322,7 +320,7 @@ static void set_rmt_tools_data(char *jsonstr)
         rmt_tools_cfg.trig = atoi(value);
         if (rmt_tools_cfg.trig >= 0)
         {
-            if(!GPIO_IS_VALID_GPIO(rmt_tools_cfg.trig)){goto _err_ret;}
+            if(!GPIO_IS_VALID_GPIO(rmt_tools_cfg.trig)){errstr = "trigg gpio err ";goto _err_ret;}
             gpio_reset_pin(rmt_tools_cfg.trig);
             gpio_set_direction(rmt_tools_cfg.trig, GPIO_MODE_OUTPUT);
         }
@@ -330,17 +328,14 @@ static void set_rmt_tools_data(char *jsonstr)
     else if (strncmp(key, RMT_GPIO_IN, sizeof(RMT_GPIO_IN) - 1) == 0)
     {
         rmt_tools_cfg.gpio_in = atoi(value);
-        if(!GPIO_IS_VALID_GPIO(rmt_tools_cfg.gpio_in)){goto _err_ret;}
     }
     else if (strncmp(key, RMT_CLK_IN, sizeof(RMT_CLK_IN) - 1) == 0)
     {
         rmt_tools_cfg.clk_in = atoi(value);
-        if(rmt_tools_cfg.clk_in<(160000000/255) || rmt_tools_cfg.clk_in>(160000000/2) ){goto _err_ret;}
     }
     else if (strncmp(key, RMT_EOF_MARKER, sizeof(RMT_EOF_MARKER) - 1) == 0)
     {
         rmt_tools_cfg.eof_marker = atoi(value);
-        if(((uint64_t)rmt_tools_cfg.clk_in*rmt_tools_cfg.eof_marker)/1000000000UL > 32767){goto _err_ret;}
     }
     else if (strncmp(key, RMT_IN_OUT_SHORT, sizeof(RMT_IN_OUT_SHORT) - 1) == 0)
     {
@@ -374,27 +369,34 @@ static void set_rmt_tools_data(char *jsonstr)
 
     else if (strncmp(key, RMT_TRANSMIT_CMD, sizeof(RMT_TRANSMIT_CMD) - 1) == 0)
     {
+        if(!GPIO_IS_VALID_GPIO(rmt_tools_cfg.gpio_out)){errstr = "transmit gpio out of range ";goto _err_ret;}
+        if(rmt_tools_cfg.clk_out<(160000000/255) || rmt_tools_cfg.clk_out>(160000000/2) ){errstr = "transmit clf out of range ";goto _err_ret;}
+
         if( !rmt_transmit_started ){
         xTaskCreate(rmt_transmit_tools, "tx_report", 2048 * 2, NULL, 5, NULL);
         rmt_transmit_started = 1;
-        } else {goto _err_ret;}
+        } else {errstr = "transmit already started err ";goto _err_ret;}
     }
     else if (strncmp(key, RMT_RECEIVE_CMD, sizeof(RMT_RECEIVE_CMD) - 1) == 0)
     {
+        if(!GPIO_IS_VALID_GPIO(rmt_tools_cfg.gpio_in)){errstr = "receive gpio out of range ";goto _err_ret;}
+        if(rmt_tools_cfg.clk_in<(160000000/255) || rmt_tools_cfg.clk_in>(160000000/2) ){errstr = "receive clk out of range ";goto _err_ret;}
+        if(((uint64_t)rmt_tools_cfg.clk_in*rmt_tools_cfg.eof_marker)/1000000000UL > 32767){errstr = "receive eof out of range ";goto _err_ret;}
+
         if( !rmt_receive_started ){
         xTaskCreate(rmt_receive_tools, "rx_report", 2048 * 2, NULL, 5, NULL);
         rmt_receive_started = 1;
-        } else {goto _err_ret;}
+        } else {errstr = "receive already started err ";goto _err_ret;}
     }
     else
     {
-        goto _err_ret;   
+        errstr = "invalid cmd err ";goto _err_ret;   
     }
     return;
 _err_ret:
-    ESP_LOGE(TAG, "ERR cmd %s", jsonstr);
+    ESP_LOGE(TAG, "ERR cmd %s", errstr);
     send_string_to_ws("ERR cmd");
-    send_string_to_ws(jsonstr);
+    send_string_to_ws(errstr);
     return;
 }
 static esp_err_t ws_handler(httpd_req_t *req)
