@@ -54,18 +54,18 @@ static async_resp_arg_t ra;
 typedef struct rmt_tools_cfg
 {
     int gpio_out;               // rmt transmit gpio
-    int clk_out;
-    int loop_out;
-    int trig;
-    int rmt_ns_mks_ms;
-    rmt_symbol_word_t rmt_data_out[64];
-    int data_out_len;
+    int clk_out;                // rmt transmit tick resolution hz
+    int loop_out;               // rmt transmit loop count 0-> once, -1-> non stop
+    int trig;                   // rmt transmi dbg gpio 1->start transmit , 0->stop transmit
+    int rmt_ns_mks_ms;          // 1/1000/1000000 -> data out scale
+    rmt_symbol_word_t rmt_data_out[64]; // rmt transmit data
+    int data_out_len;           // calculated number of transmit samples
 
-    int gpio_in;
-    int clk_in;
-    int eof_marker;
-    int in_out_short;
-    rmt_symbol_word_t rmt_data_in[64];
+    int gpio_in;                // rmt receive gpio
+    int clk_in;                 // rmt receive tick resolution hz
+    int eof_marker;             // rmt recrive eof marker ( nSek )
+    int in_out_short;           // rmt receive/transmit loopback
+    rmt_symbol_word_t rmt_data_in[64]; // rmt receive data
     int data_in_len;
 
 } rmt_tools_cfg_t;
@@ -166,14 +166,13 @@ static QueueHandle_t receive_queue;
 static void rmt_receive_tools(void *p)
 {
 
-
     ESP_LOGI(TAG, "START RECEIVE");
     send_string_to_ws("START RECEIVE  ");
 
     rmt_channel_handle_t rx_chan = NULL;
     rmt_rx_channel_config_t rx_chan_config = {
         .clk_src = RMT_CLK_SRC_DEFAULT,        // select source clock
-        .resolution_hz = rmt_tools_cfg.clk_in, // 1 MHz tick resolution, i.e., 1 tick = 1 µs
+        .resolution_hz = rmt_tools_cfg.clk_in, // tick resolution, 
         .mem_block_symbols = 64,               // memory block size, 64 * 4 = 256 Bytes
         .gpio_num = rmt_tools_cfg.gpio_in,     // GPIO number
         .flags.invert_in = false,              // do not invert input signal
@@ -245,9 +244,9 @@ static void rmt_transmit_tools(void *p)
         .clk_src = RMT_CLK_SRC_DEFAULT, // select source clock
         .gpio_num = rmt_tools_cfg.gpio_out,
         .mem_block_symbols = 64,
-        .flags.io_loop_back = 1,
+        .flags.io_loop_back = 1,    // gpio output/input mode
         .resolution_hz = rmt_tools_cfg.clk_out,
-        .trans_queue_depth = 10, // set the maximum number of transactions that can pend in the background
+        .trans_queue_depth = 5, // set the maximum number of transactions that can pend in the background
     };
     ESP_ERROR_CHECK(rmt_new_tx_channel(&tx_chan_config, &tx_chan_handle));
 
