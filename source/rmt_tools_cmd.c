@@ -78,6 +78,9 @@ static rmt_tools_cfg_t rmt_tools_cfg = {
     .in_out_short = 1
     };
 
+static  int rmt_transmit_started = 0;
+static  int rmt_receive_started = 0;
+
 // set/clear trigger pin
 static void trig_set(int lvl)
 {
@@ -159,9 +162,7 @@ static bool rmt_rx_done_callback(rmt_channel_handle_t channel, const rmt_rx_done
 }
 
 static QueueHandle_t receive_queue;
-rmt_rx_event_callbacks_t cbs = {
-    .on_recv_done = rmt_rx_done_callback,
-};
+
 static void rmt_receive_tools(void *p)
 {
     httpd_req_t *req = (httpd_req_t *)p;
@@ -181,6 +182,9 @@ static void rmt_receive_tools(void *p)
     };
     ESP_ERROR_CHECK(rmt_new_rx_channel(&rx_chan_config, &rx_chan));
     receive_queue = xQueueCreate(10, sizeof(rmt_rx_done_event_data_t));
+    rmt_rx_event_callbacks_t cbs = {
+        .on_recv_done = rmt_rx_done_callback,
+    };
     ESP_ERROR_CHECK(rmt_rx_register_event_callbacks(rx_chan, &cbs, receive_queue));
     ESP_ERROR_CHECK(rmt_enable(rx_chan));
     rmt_receive_config_t receive_config = {
@@ -199,18 +203,36 @@ static void rmt_receive_tools(void *p)
     {
         for (int i = 0; i < rx_data.num_symbols; i++)
         {
+            char *s0;
+            int d0 = rx_data.received_symbols[i].duration0*(1000000000/rmt_tools_cfg.clk_out);
+            if (d0 < 1000) {s0 = "nS";}
+            else if ((d0 < 1000000)){s0 = "mkS"; d0/=1000;}
+            else {s0 = "mS"; d0/=1000000;}
+            char *s1;
+            int d1 = rx_data.received_symbols[i].duration1*(1000000000/rmt_tools_cfg.clk_out);
+            if (d1 < 1000) {s1 = "nS";}
+            else if ((d1 < 1000000)){s1 = "mkS"; d0/=1000;}
+            else {s1 = "mS"; d1/=1000000;}
+
+        sprintf(sendstr, "%d %d->%d %s %d->%d %s",i,rx_data.received_symbols[i].level0,d0,s0,rx_data.received_symbols[i].level1,d1,s1);
+/*
             sprintf(sendstr, "%d %d->%d ns %d->%d ns", i,
                     rx_data.received_symbols[i].level0,
                     rx_data.received_symbols[i].duration0*(1000000000/rmt_tools_cfg.clk_out),
                     rx_data.received_symbols[i].level1,
                     rx_data.received_symbols[i].duration1*(1000000000/rmt_tools_cfg.clk_out));
+*/                    
             send_string_to_ws(sendstr, req);
         }
+
     }
-    vQueueDelete(receive_queue);
     rmt_disable(rx_chan);
+    cbs.on_recv_done = NULL;
+    rmt_rx_register_event_callbacks(rx_chan, &cbs, receive_queue);
     rmt_del_channel(rx_chan);
+    vQueueDelete(receive_queue);
     ESP_LOGI(TAG, "RECEIVE DONE");
+    rmt_receive_started=0;
     vTaskDelete(0);
 }
 static void rmt_transmit_tools(void *p)
@@ -255,6 +277,7 @@ static void rmt_transmit_tools(void *p)
 
     ESP_LOGI(TAG, "TRANSMIT DONE");
     send_string_to_ws("TRANSMIT DONE ", req);
+    rmt_transmit_started = 0;
     vTaskDelete(0);
 }
 
@@ -280,10 +303,12 @@ static void set_rmt_tools_data(char *jsonstr, httpd_req_t *req)
     if (strncmp(key, RMT_GPIO_OUT, sizeof(RMT_GPIO_OUT) - 1) == 0)
     {
         rmt_tools_cfg.gpio_out = atoi(value);
+        if(!GPIO_IS_VALID_GPIO(rmt_tools_cfg.gpio_out)){goto _err_ret;}
     }
     else if (strncmp(key, RMT_CLK_OUT, sizeof(RMT_CLK_OUT) - 1) == 0)
     {
         rmt_tools_cfg.clk_out = atoi(value);
+        if(rmt_tools_cfg.clk_out<(160000000/255) || rmt_tools_cfg.clk_out>(160000000/2) ){goto _err_ret;}
     }
     else if (strncmp(key, RMT_NS_MKS_MS, sizeof(RMT_NS_MKS_MS) - 1) == 0)
     {
@@ -298,6 +323,7 @@ static void set_rmt_tools_data(char *jsonstr, httpd_req_t *req)
         rmt_tools_cfg.trig = atoi(value);
         if (rmt_tools_cfg.trig >= 0)
         {
+            if(!GPIO_IS_VALID_GPIO(rmt_tools_cfg.trig)){goto _err_ret;}
             gpio_reset_pin(rmt_tools_cfg.trig);
             gpio_set_direction(rmt_tools_cfg.trig, GPIO_MODE_OUTPUT);
         }
@@ -305,15 +331,17 @@ static void set_rmt_tools_data(char *jsonstr, httpd_req_t *req)
     else if (strncmp(key, RMT_GPIO_IN, sizeof(RMT_GPIO_IN) - 1) == 0)
     {
         rmt_tools_cfg.gpio_in = atoi(value);
+        if(!GPIO_IS_VALID_GPIO(rmt_tools_cfg.gpio_in)){goto _err_ret;}
     }
-
     else if (strncmp(key, RMT_CLK_IN, sizeof(RMT_CLK_IN) - 1) == 0)
     {
         rmt_tools_cfg.clk_in = atoi(value);
+        if(rmt_tools_cfg.clk_in<(160000000/255) || rmt_tools_cfg.clk_in>(160000000/2) ){goto _err_ret;}
     }
     else if (strncmp(key, RMT_EOF_MARKER, sizeof(RMT_EOF_MARKER) - 1) == 0)
     {
         rmt_tools_cfg.eof_marker = atoi(value);
+        if(((uint64_t)rmt_tools_cfg.clk_in*rmt_tools_cfg.eof_marker)/1000000000UL > 32767){goto _err_ret;}
     }
     else if (strncmp(key, RMT_IN_OUT_SHORT, sizeof(RMT_IN_OUT_SHORT) - 1) == 0)
     {
@@ -347,20 +375,27 @@ static void set_rmt_tools_data(char *jsonstr, httpd_req_t *req)
 
     else if (strncmp(key, RMT_TRANSMIT_CMD, sizeof(RMT_TRANSMIT_CMD) - 1) == 0)
     {
+        if( !rmt_transmit_started ){
         xTaskCreate(rmt_transmit_tools, "tx_report", 2048 * 2, (void *)req, 5, NULL);
+        rmt_transmit_started = 1;
+        } else {goto _err_ret;}
     }
     else if (strncmp(key, RMT_RECEIVE_CMD, sizeof(RMT_RECEIVE_CMD) - 1) == 0)
     {
+        if( !rmt_receive_started ){
         xTaskCreate(rmt_receive_tools, "rx_report", 2048 * 2, (void *)req, 5, NULL);
+        rmt_receive_started = 1;
+        } else {goto _err_ret;}
     }
-
     else
     {
-        ESP_LOGE(TAG, "ERR cmd %s", jsonstr);
-        send_string_to_ws("ERR cmd", req);
-        send_string_to_ws(jsonstr, req);
+        goto _err_ret;   
     }
-
+    return;
+_err_ret:
+    ESP_LOGE(TAG, "ERR cmd %s", jsonstr);
+    send_string_to_ws("ERR cmd", req);
+    send_string_to_ws(jsonstr, req);
     return;
 }
 static esp_err_t ws_handler(httpd_req_t *req)
