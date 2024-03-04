@@ -53,7 +53,7 @@ static async_resp_arg_t ra;
 
 typedef struct rmt_tools_cfg
 {
-    int gpio_out;
+    int gpio_out;               // rmt transmit gpio
     int clk_out;
     int loop_out;
     int trig;
