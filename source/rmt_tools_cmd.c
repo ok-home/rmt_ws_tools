@@ -203,15 +203,15 @@ static void rmt_receive_tools(void *p)
         for (int i = 0; i < rx_data.num_symbols; i++)
         {
             char *s0;
-            int d0 = rx_data.received_symbols[i].duration0*(1000000000/rmt_tools_cfg.clk_in);
-            if (d0 < 1000) {s0 = "nS";}
-            else if ((d0 < 1000000)){s0 = "mkS"; d0/=1000;}
-            else {s0 = "mS"; d0/=1000000;}
+            int d0 = rx_data.received_symbols[i].duration0*(10000/(rmt_tools_cfg.clk_in/1000000));
+            if (d0 < 10000) {s0 = "nS"; d0/=10}
+            else if ((d0 < 10000000)){s0 = "mkS"; d0/=10000;}
+            else {s0 = "mS"; d0/=10000000;}
             char *s1;
-            int d1 = rx_data.received_symbols[i].duration1*(1000000000/rmt_tools_cfg.clk_in);
-            if (d1 < 1000) {s1 = "nS";}
-            else if ((d1 < 1000000)){s1 = "mkS"; d1/=1000;}
-            else {s1 = "mS"; d1/=1000000;}
+            int d1 = rx_data.received_symbols[i].duration1*(10000/(rmt_tools_cfg.clk_in/1000000));
+            if (d1 < 10000) {s1 = "nS";d1/=10}
+            else if ((d1 < 10000000)){s1 = "mkS"; d1/=10000;}
+            else {s1 = "mS"; d1/=10000000;}
 
         sprintf(sendstr, "%d %d->%d %s %d->%d %s",i,rx_data.received_symbols[i].level0,d0,s0,rx_data.received_symbols[i].level1,d1,s1);
 /*
