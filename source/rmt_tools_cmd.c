@@ -6,6 +6,7 @@
    CONDITIONS OF ANY KIND, either express or implied.
 */
 #include <stdio.h>
+#include <ctype.h>
 #include "esp_log.h"
 
 #include "esp_wifi.h"
@@ -204,12 +205,12 @@ static void rmt_receive_tools(void *p)
         {
             char *s0;
             int d0 = rx_data.received_symbols[i].duration0*(10000/(rmt_tools_cfg.clk_in/1000000));
-            if (d0 < 10000) {s0 = "nS"; d0/=10}
+            if (d0 < 10000) {s0 = "nS"; d0/=10;}
             else if ((d0 < 10000000)){s0 = "mkS"; d0/=10000;}
             else {s0 = "mS"; d0/=10000000;}
             char *s1;
             int d1 = rx_data.received_symbols[i].duration1*(10000/(rmt_tools_cfg.clk_in/1000000));
-            if (d1 < 10000) {s1 = "nS";d1/=10}
+            if (d1 < 10000) {s1 = "nS";d1/=10;}
             else if ((d1 < 10000000)){s1 = "mkS"; d1/=10000;}
             else {s1 = "mS"; d1/=10000000;}
 
@@ -266,8 +267,8 @@ static void rmt_transmit_tools(void *p)
     //    }
     if (rmt_tx_wait_all_done(tx_chan_handle, RMT_TIMEOUT_MS) == ESP_ERR_TIMEOUT)
     {
-        ESP_LOGI(TAG, "RMT timeout 10 sec");
-        send_string_to_ws("RMT timeout 10 sec");
+        ESP_LOGI(TAG, "RMT transmit timeout 10 sec");
+                send_string_to_ws("RMT transmit timeout 10 sec");
     }
 
     trig_set(0);
@@ -283,7 +284,7 @@ static void rmt_transmit_tools(void *p)
 
 int cvt_to_clk(char *tok)
 {
-    if(!isdigit(*tok))
+    if(isdigit((uint8_t)tok[0])==0)
     {
         ESP_LOGE(TAG,"ERR Transmit data format  %s",tok);
         send_string_to_ws("ERR Transmit data format");
@@ -295,6 +296,7 @@ int cvt_to_clk(char *tok)
         ESP_LOGE(TAG,"ERR Transmit data out of range %d set to max value 32767",ret);
         send_string_to_ws("ERR Transmit data out of range, set to max value 32767");
         ret = 0x7fff;}
+    ESP_LOGI(TAG,"%d",ret);
     return ret;
 }
 // write ws data from ws to rmt_tools_cfg & run rmt cmd
@@ -333,7 +335,7 @@ static void set_rmt_tools_data(char *jsonstr)
         {
             if(!GPIO_IS_VALID_GPIO(rmt_tools_cfg.trig)){errstr = "Error -> trigger gpio num";goto _err_ret;}
             gpio_reset_pin(rmt_tools_cfg.trig);
-            gpio_set_direction(rmt_tools_cfg.trig, GPIO_MODE_OUTPUT_INPUT);
+            gpio_set_direction(rmt_tools_cfg.trig, GPIO_MODE_INPUT_OUTPUT);
         }
     }
     else if (strncmp(key, RMT_GPIO_IN, sizeof(RMT_GPIO_IN) - 1) == 0)
