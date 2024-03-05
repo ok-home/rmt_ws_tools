@@ -296,7 +296,7 @@ int cvt_to_clk(char *tok)
         ESP_LOGE(TAG,"ERR Transmit data out of range %d set to max value 32767",ret);
         send_string_to_ws("ERR Transmit data out of range, set to max value 32767");
         ret = 0x7fff;}
-    ESP_LOGI(TAG,"%d",ret);
+    //ESP_LOGI(TAG,"%d",ret);
     return ret;
 }
 // write ws data from ws to rmt_tools_cfg & run rmt cmd
