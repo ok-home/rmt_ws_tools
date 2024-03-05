@@ -166,8 +166,8 @@ static QueueHandle_t receive_queue;
 static void rmt_receive_tools(void *p)
 {
 
-    ESP_LOGI(TAG, "START RECEIVE");
-    send_string_to_ws("START RECEIVE  ");
+    ESP_LOGI(TAG, "RMT Start receive");
+    send_string_to_ws("RMT Start receive");
 
     rmt_channel_handle_t rx_chan = NULL;
     rmt_rx_channel_config_t rx_chan_config = {
@@ -192,11 +192,11 @@ static void rmt_receive_tools(void *p)
     };
     ESP_ERROR_CHECK(rmt_receive(rx_chan, rmt_tools_cfg.rmt_data_in, sizeof(rmt_tools_cfg.rmt_data_in), &receive_config));
     rmt_rx_done_event_data_t rx_data;
-    char sendstr[128];
+
     if (xQueueReceive(receive_queue, &rx_data, RMT_TIMEOUT_MS / portTICK_PERIOD_MS) == pdFALSE)
     {
-        ESP_LOGI(TAG, "RMT RECEIVE TIMEOUT 10 sec");
-        send_string_to_ws("RMT RECEIVE TIMEOUT 10 sec");
+        ESP_LOGI(TAG, "RMT Recrive timeout 10 sec");
+        send_string_to_ws("RMT Recrive timeout 10 sec");
     }
     else
     {
@@ -213,7 +213,8 @@ static void rmt_receive_tools(void *p)
             else if ((d1 < 10000000)){s1 = "mkS"; d1/=10000;}
             else {s1 = "mS"; d1/=10000000;}
 
-        sprintf(sendstr, "%d %d->%d %s %d->%d %s",i,rx_data.received_symbols[i].level0,d0,s0,rx_data.received_symbols[i].level1,d1,s1);
+            char sendstr[64];
+            sprintf(sendstr, "%d %d->%d %s %d->%d %s",i,rx_data.received_symbols[i].level0,d0,s0,rx_data.received_symbols[i].level1,d1,s1);
 /*
             sprintf(sendstr, "%d %d->%d ns %d->%d ns", i,
                     rx_data.received_symbols[i].level0,
@@ -230,15 +231,15 @@ static void rmt_receive_tools(void *p)
     rmt_rx_register_event_callbacks(rx_chan, &cbs, receive_queue);
     rmt_del_channel(rx_chan);
     vQueueDelete(receive_queue);
-    ESP_LOGI(TAG, "RECEIVE DONE");
+    ESP_LOGI(TAG, "Receive OK");
     rmt_receive_started=0;
     vTaskDelete(0);
 }
 static void rmt_transmit_tools(void *p)
 {
 
-    ESP_LOGI(TAG,"START TRANSMIT");
-    send_string_to_ws("START TRANSMIT  ");
+    ESP_LOGI(TAG,"Start transmit");
+    send_string_to_ws("Start transmit");
     rmt_channel_handle_t tx_chan_handle = NULL;
     rmt_tx_channel_config_t tx_chan_config = {
         .clk_src = RMT_CLK_SRC_DEFAULT, // select source clock
@@ -265,8 +266,8 @@ static void rmt_transmit_tools(void *p)
     //    }
     if (rmt_tx_wait_all_done(tx_chan_handle, RMT_TIMEOUT_MS) == ESP_ERR_TIMEOUT)
     {
-        ESP_LOGI(TAG, "RMT TIMEOUT 10 sec");
-        send_string_to_ws("RMT TIMEOUT 10 sec");
+        ESP_LOGI(TAG, "RMT timeout 10 sec");
+        send_string_to_ws("RMT timeout 10 sec");
     }
 
     trig_set(0);
@@ -274,17 +275,27 @@ static void rmt_transmit_tools(void *p)
     rmt_del_encoder(tx_encoder);
     rmt_del_channel(tx_chan_handle);
 
-    ESP_LOGI(TAG, "TRANSMIT DONE");
-    send_string_to_ws("TRANSMIT DONE ");
+    ESP_LOGI(TAG, "Transmit OK");
+    send_string_to_ws("Transmit OK");
     rmt_transmit_started = 0;
     vTaskDelete(0);
 }
 
 int cvt_to_clk(char *tok)
 {
+    if(!isdigit(*tok))
+    {
+        ESP_LOGE(TAG,"ERR Transmit data format  %s",tok);
+        send_string_to_ws("ERR Transmit data format");
+    }
     int data = atoi(tok);
     int f = (rmt_tools_cfg.clk_out / 1000000) * rmt_tools_cfg.rmt_ns_mks_ms;
-    return (data * f) / 1000;
+    int ret = (data * f) / 1000; 
+    if(ret > 0x7fff) {
+        ESP_LOGE(TAG,"ERR Transmit data out of range %d set to max value 32767",ret);
+        send_string_to_ws("ERR Transmit data out of range, set to max value 32767");
+        ret = 0x7fff;}
+    return ret;
 }
 // write ws data from ws to rmt_tools_cfg & run rmt cmd
 static void set_rmt_tools_data(char *jsonstr)
@@ -320,9 +331,9 @@ static void set_rmt_tools_data(char *jsonstr)
         rmt_tools_cfg.trig = atoi(value);
         if (rmt_tools_cfg.trig >= 0)
         {
-            if(!GPIO_IS_VALID_GPIO(rmt_tools_cfg.trig)){errstr = "trigg gpio err ";goto _err_ret;}
+            if(!GPIO_IS_VALID_GPIO(rmt_tools_cfg.trig)){errstr = "Error -> trigger gpio num";goto _err_ret;}
             gpio_reset_pin(rmt_tools_cfg.trig);
-            gpio_set_direction(rmt_tools_cfg.trig, GPIO_MODE_OUTPUT);
+            gpio_set_direction(rmt_tools_cfg.trig, GPIO_MODE_OUTPUT_INPUT);
         }
     }
     else if (strncmp(key, RMT_GPIO_IN, sizeof(RMT_GPIO_IN) - 1) == 0)
@@ -369,33 +380,32 @@ static void set_rmt_tools_data(char *jsonstr)
 
     else if (strncmp(key, RMT_TRANSMIT_CMD, sizeof(RMT_TRANSMIT_CMD) - 1) == 0)
     {
-        if(!GPIO_IS_VALID_GPIO(rmt_tools_cfg.gpio_out)){errstr = "transmit gpio out of range ";goto _err_ret;}
-        if(rmt_tools_cfg.clk_out<(160000000/255) || rmt_tools_cfg.clk_out>(160000000/2) ){errstr = "transmit clf out of range ";goto _err_ret;}
+        if(!GPIO_IS_VALID_GPIO(rmt_tools_cfg.gpio_out)){errstr = "Error -> transmit gpio num out of range ";goto _err_ret;}
+        if(rmt_tools_cfg.clk_out<(160000000/255) || rmt_tools_cfg.clk_out>(160000000/2) ){errstr = "Error -> transmit clk out of range ";goto _err_ret;}
 
         if( !rmt_transmit_started ){
         xTaskCreate(rmt_transmit_tools, "tx_report", 2048 * 2, NULL, 5, NULL);
         rmt_transmit_started = 1;
-        } else {errstr = "transmit already started err ";goto _err_ret;}
+        } else {errstr = "Error -> transmit already started";goto _err_ret;}
     }
     else if (strncmp(key, RMT_RECEIVE_CMD, sizeof(RMT_RECEIVE_CMD) - 1) == 0)
     {
-        if(!GPIO_IS_VALID_GPIO(rmt_tools_cfg.gpio_in)){errstr = "receive gpio out of range ";goto _err_ret;}
-        if(rmt_tools_cfg.clk_in<(160000000/255) || rmt_tools_cfg.clk_in>(160000000/2) ){errstr = "receive clk out of range ";goto _err_ret;}
-        if(((uint64_t)rmt_tools_cfg.clk_in*rmt_tools_cfg.eof_marker)/1000000000UL > 32767){errstr = "receive eof out of range ";goto _err_ret;}
+        if(!GPIO_IS_VALID_GPIO(rmt_tools_cfg.gpio_in)){errstr = "Error -> receive gpio num out of range ";goto _err_ret;}
+        if(rmt_tools_cfg.clk_in<(160000000/255) || rmt_tools_cfg.clk_in>(160000000/2) ){errstr = "Error -> receive clk out of range ";goto _err_ret;}
+        if(((uint64_t)rmt_tools_cfg.clk_in*rmt_tools_cfg.eof_marker)/1000000000UL > 32767){errstr = "Error -> receive eof out of range ";goto _err_ret;}
 
         if( !rmt_receive_started ){
         xTaskCreate(rmt_receive_tools, "rx_report", 2048 * 2, NULL, 5, NULL);
         rmt_receive_started = 1;
-        } else {errstr = "receive already started err ";goto _err_ret;}
+        } else {errstr = "Error -> receive already started";goto _err_ret;}
     }
     else
     {
-        errstr = "invalid cmd err ";goto _err_ret;   
+        errstr = "Error -> invalid cmd";goto _err_ret;   
     }
     return;
 _err_ret:
-    ESP_LOGE(TAG, "ERR cmd %s", errstr);
-    send_string_to_ws("ERR cmd");
+    ESP_LOGE(TAG, "%s", errstr);
     send_string_to_ws(errstr);
     return;
 }
